@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Calendar,
-  ChevronDown,
   Plus,
   Save,
   Search,
@@ -660,7 +659,11 @@ function InventoryAdjustmentEditor() {
                   return (
                     <tr key={idx} style={{ backgroundColor: bad ? '#fff7ed' : '#fff' }}>
                       <td style={{ ...TD, textAlign: 'center' }}>
-                        {bad && <AlertTriangle size={14} style={{ color: '#f59e0b' }} title="Missing required field" />}
+                        {bad && (
+                          <span title="Missing required field" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <AlertTriangle size={14} style={{ color: '#f59e0b' }} />
+                          </span>
+                        )}
                       </td>
                       <td style={TD}>
                         <select value={l.product} disabled={!canEdit} onChange={(e) => setLine(idx, { product: e.target.value })} style={{ ...inputSt, height: 32, cursor: canEdit ? 'pointer' : 'not-allowed' }}>

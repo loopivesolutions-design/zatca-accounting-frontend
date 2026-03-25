@@ -28,7 +28,7 @@ export function parseApiError(err: unknown): string {
 
   // DRF validation error — flat or nested field errors
   const lines: string[] = [];
-  for (const [key, val] of Object.entries(body)) {
+  for (const val of Object.values(body)) {
     if (Array.isArray(val)) lines.push(...(val as string[]));
     else if (typeof val === 'string') lines.push(val);
   }
