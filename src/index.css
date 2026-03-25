@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #35C0A3;
+  --color-primary-dark: #2aa88d;
+  --color-primary-light: #e8f8f5;
+  --color-sidebar-text: #616161;
+  --font-heebo: 'Heebo', sans-serif;
+}
+
+/* Force light mode — prevent dark-mode OS preference from affecting the UI */
+:root {
+  color-scheme: light;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  font-family: 'Heebo', sans-serif;
+  font-size: 14px;
+  color: #333333;
+  background-color: #f4f6f8;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100vh;
+  background-color: #f4f6f8;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
