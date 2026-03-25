@@ -72,3 +72,4 @@ export default defineConfig([
 ])
 ```
 # zatca-accounting-frontend
+# zatca-accounting-frontend
