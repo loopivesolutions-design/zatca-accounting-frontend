@@ -226,7 +226,7 @@ function resolveImageUrl(path: string | null | undefined): string | null {
   // Already an absolute URL
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
 
-  const base = 'http://127.0.0.1:8000';
+  const base = 'https://zatca-backend.loopive.com';
 
   // If backend already includes /media/, just prepend base
   if (path.startsWith('/media/')) {

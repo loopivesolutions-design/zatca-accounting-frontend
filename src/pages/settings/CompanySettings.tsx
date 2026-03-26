@@ -35,7 +35,7 @@ interface Country {
 function resolveMediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const base = 'http://127.0.0.1:8000';
+  const base = 'https://zatca-backend.loopive.com';
   if (path.startsWith('/media/')) return `${base}${path}`;
   const clean = path.replace(/^\/+/, '');
   return `${base}/media/${clean}`;

@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BACKEND_URL = 'https://zatca-backend.loopive.com';
+
 const api = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -57,7 +59,7 @@ api.interceptors.response.use(
 
       try {
         const { data } = await axios.post(
-          'http://127.0.0.1:8000/api/v1/user/token/refresh/',
+          `${BACKEND_URL}/api/v1/user/token/refresh/`,
           { refresh: refreshToken },
           { headers: { 'Content-Type': 'application/json' } }
         );
