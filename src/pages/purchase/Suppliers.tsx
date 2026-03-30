@@ -61,6 +61,8 @@ const labelSt: React.CSSProperties = {
 const PAGE_BG = '#F2F7F6';
 const PAGE_TEXT = '#010101';
 
+type SelectOption = { value: string; label: string };
+
 function digitsOnly(v: string) {
   return v.replace(/\D+/g, '');
 }
@@ -173,6 +175,107 @@ function InlineArInput({
       <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
         <ArToggleButton opened={arShown} onClick={onToggleAr} />
       </div>
+    </div>
+  );
+}
+
+function CustomSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select',
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
+      <button
+        type="button"
+        onClick={() => { if (!disabled) setOpen((p) => !p); }}
+        disabled={disabled}
+        style={{
+          ...inputSt,
+          textAlign: 'left',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingRight: 14,
+          color: selected ? '#111827' : '#9ca3af',
+          backgroundColor: '#fff',
+        }}
+      >
+        <span>{selected?.label ?? placeholder}</span>
+        <ChevronDown size={14} style={{ color: '#9ca3af', marginLeft: 12, flexShrink: 0 }} />
+      </button>
+      {open && !disabled ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            right: 0,
+            backgroundColor: '#FFFFFF',
+            border: '0.2px solid #000000',
+            borderRadius: 5,
+            boxShadow: '0px 2px 12px -2px rgba(0, 0, 0, 0.15)',
+            zIndex: 30,
+            overflow: 'hidden',
+            maxHeight: 220,
+            overflowY: 'auto',
+          }}
+        >
+          {options.map((opt) => {
+            const isActive = opt.value === value;
+            const isHovered = hovered === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onMouseEnter={() => setHovered(opt.value)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  border: 'none',
+                  backgroundColor: isHovered || isActive ? '#F2F7F6' : '#FFFFFF',
+                  color: isHovered || isActive ? '#303030' : '#616161',
+                  padding: '10px 12px',
+                  fontSize: 13.5,
+                  cursor: 'pointer',
+                  fontFamily: "'Heebo', sans-serif",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -501,15 +604,13 @@ function SuppliersModal({
             <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '180px minmax(0, 1fr)', gap: 14, alignItems: 'center' }}>
                 <span style={labelSt}>Country</span>
-                <select
+                <CustomSelect
                   value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  style={{ ...inputSt, cursor: countries.length ? 'pointer' : 'not-allowed', color: country ? '#111827' : '#9ca3af' }}
+                  onChange={setCountry}
+                  options={countries.map((c) => ({ value: c.id, label: c.name }))}
+                  placeholder={countries.length ? 'Select' : 'Loading...'}
                   disabled={!countries.length}
-                >
-                  <option value="">{countries.length ? 'Select' : 'Loading…'}</option>
-                  {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                />
 
                 <span style={labelSt}>Street Address*</span>
                 <InlineArInput
@@ -529,7 +630,15 @@ function SuppliersModal({
                 <input value={building} onChange={(e) => setBuilding(e.target.value)} style={inputSt} required placeholder="Empty" />
 
                 <span style={labelSt}>Land Identifier*</span>
-                <input value={landId} onChange={(e) => setLandId(e.target.value)} style={inputSt} required placeholder="Empty" />
+                <input
+                  value={landId}
+                  onChange={(e) => setLandId(digitsOnly(e.target.value))}
+                  style={inputSt}
+                  required
+                  placeholder="Empty"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                />
 
                 <span style={labelSt}>District*</span>
                 <InlineArInput
@@ -571,10 +680,12 @@ function SuppliersModal({
             <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, alignItems: 'center' }}>
                 <span style={labelSt}>Payment Terms*</span>
-                <select value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
-                  <option value="">Select</option>
-                  {(choices?.payment_terms ?? []).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
+                <CustomSelect
+                  value={paymentTerms}
+                  onChange={setPaymentTerms}
+                  options={(choices?.payment_terms ?? []).map((c) => ({ value: c.id, label: c.label }))}
+                  placeholder="Select"
+                />
 
                 <span style={labelSt}>Opening Balance</span>
                 <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
@@ -592,35 +703,39 @@ function SuppliersModal({
                   ))}
                 </div>
 
-                <span style={labelSt}>Amount*</span>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12.5, color: '#6b7280', border: '1px solid #e5e7eb', background: '#f9fafb', height: 36, display: 'inline-flex', alignItems: 'center', paddingInline: 10, borderRadius: 8 }}>SAR</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min={0}
-                    value={openingAmount}
-                    onChange={(e) => setOpeningAmount(e.target.value)}
-                    style={{ ...inputSt, flex: 1 }}
-                    disabled={!showOpening}
-                    placeholder={showOpening ? 'Enter amount' : ''}
-                  />
-                </div>
+                {showOpening ? (
+                  <>
+                    <span style={labelSt}>Amount*</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 12.5, color: '#6b7280', border: '1px solid #e5e7eb', background: '#f9fafb', height: 36, display: 'inline-flex', alignItems: 'center', paddingInline: 10, borderRadius: 8 }}>SAR</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        value={openingAmount}
+                        onChange={(e) => setOpeningAmount(e.target.value)}
+                        style={{ ...inputSt, flex: 1 }}
+                        placeholder="Enter amount"
+                      />
+                    </div>
 
-                <span style={labelSt}>As of*</span>
-                <input
-                  type="date"
-                  value={openingAsOf}
-                  onChange={(e) => setOpeningAsOf(e.target.value)}
-                  style={inputSt}
-                  disabled={!showOpening}
-                />
+                    <span style={labelSt}>As of*</span>
+                    <input
+                      type="date"
+                      value={openingAsOf}
+                      onChange={(e) => setOpeningAsOf(e.target.value)}
+                      style={inputSt}
+                    />
 
-                <span style={labelSt}>Opening Balance Account</span>
-                <select value={openingAccount} onChange={(e) => setOpeningAccount(e.target.value)} style={{ ...inputSt, cursor: showOpening ? 'pointer' : 'not-allowed' }} disabled={!showOpening}>
-                  <option value="">Select</option>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
-                </select>
+                    <span style={labelSt}>Opening Balance Account</span>
+                    <CustomSelect
+                      value={openingAccount}
+                      onChange={setOpeningAccount}
+                      options={accounts.map((a) => ({ value: a.id, label: `${a.code} - ${a.name}` }))}
+                      placeholder="Select"
+                    />
+                  </>
+                ) : null}
               </div>
             </div>
           </div>
