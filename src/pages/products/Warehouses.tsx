@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
-import { Search, Plus, Pencil, Trash2, X, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, X, Copy, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
@@ -19,6 +19,10 @@ interface Warehouse {
   postal_code: string;
   address_display: string;
   is_active: boolean;
+  is_locked?: boolean;
+  coa_account?: string | null;
+  coa_account_code?: string | null;
+  coa_account_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -93,8 +97,27 @@ function WarehouseModal({
   const [postal, setPostal] = useState(initial?.postal_code ?? '');
 
   const [addrOpen, setAddrOpen] = useState(true);
+  const [coaAccount, setCoaAccount] = useState(initial?.coa_account ?? '');
+  const [coaChoices, setCoaChoices] = useState<{ id: string; code: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setCoaAccount(initial?.coa_account ?? '');
+  }, [initial?.id, initial?.coa_account]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await api.get<{ parent_accounts: { id: string; code: string; name: string }[] }>(
+          '/api/v1/accounting/chart-of-accounts/choices/',
+        );
+        setCoaChoices(data.parent_accounts ?? []);
+      } catch {
+        setCoaChoices([]);
+      }
+    })();
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -115,6 +138,7 @@ function WarehouseModal({
         city,
         city_ar: cityAr,
         postal_code: postal,
+        coa_account: coaAccount || null,
       };
       const { data } =
         mode === 'create'
@@ -255,6 +279,21 @@ function WarehouseModal({
                 />
                 <div />
 
+                <span style={labelSt}>CoA account</span>
+                <select
+                  value={coaAccount}
+                  onChange={(e) => setCoaAccount(e.target.value)}
+                  style={{ ...inputSt, cursor: 'pointer' }}
+                >
+                  <option value="">None</option>
+                  {coaChoices.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code} — {a.name}
+                    </option>
+                  ))}
+                </select>
+                <div />
+
                 <span style={labelSt}>Phone</span>
                 <input
                   value={phone}
@@ -381,13 +420,12 @@ export default function Warehouses() {
   }, []);
 
   useEffect(() => {
-    fetchWarehouses('');
-  }, []);
-
-  useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchWarehouses(search), 320);
-  }, [search]);
+    searchTimer.current = setTimeout(() => void fetchWarehouses(search), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, fetchWarehouses]);
 
   const allSelected = warehouses.length > 0 && selected.size === warehouses.length;
   function toggleAll() {
@@ -537,6 +575,8 @@ export default function Warehouses() {
               <th style={TH}>Address</th>
               <th style={TH}>City</th>
               <th style={TH}>Phone</th>
+              <th style={TH}>CoA</th>
+              <th style={{ ...TH, textAlign: 'center', width: 44 }}> </th>
               <th style={TH}>Status</th>
               <th style={{ ...TH, width: 80, borderRight: 'none' }} />
             </tr>
@@ -544,13 +584,13 @@ export default function Warehouses() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#aaa', borderRight: 'none' }}>
+                <td colSpan={10} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#aaa', borderRight: 'none' }}>
                   <div style={{ display: 'inline-block', width: 20, height: 20, border: '2px solid #35C0A3', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
                 </td>
               </tr>
             ) : warehouses.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#aaa', borderRight: 'none' }}>
+                <td colSpan={10} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#aaa', borderRight: 'none' }}>
                   No warehouses found.
                 </td>
               </tr>
@@ -580,6 +620,12 @@ export default function Warehouses() {
                     </td>
                     <td style={{ ...TD, color: '#6b7280' }}>{w.city || '—'}</td>
                     <td style={{ ...TD, color: '#6b7280' }}>{w.phone || '—'}</td>
+                    <td style={{ ...TD, color: '#6b7280', fontSize: 12.5 }}>
+                      {w.coa_account_code ? `${w.coa_account_code} — ${w.coa_account_name ?? ''}` : '—'}
+                    </td>
+                    <td style={{ ...TD, textAlign: 'center' }} title={w.is_locked ? 'Has posted inventory activity' : ''}>
+                      {w.is_locked ? <Lock size={14} style={{ color: '#f59e0b' }} /> : '—'}
+                    </td>
                     <td style={TD}>
                       <StatusBadge active={w.is_active} />
                     </td>
@@ -593,8 +639,8 @@ export default function Warehouses() {
                         </button>
                         <button
                           onClick={() => deleteWarehouse(w)}
-                          disabled={isDeleting}
-                          style={{ width: 28, height: 28, borderRadius: 6, border: 'none', backgroundColor: '#fff5f5', color: '#e53e3e', cursor: isDeleting ? 'not-allowed' : 'pointer', opacity: isDeleting ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          disabled={isDeleting || w.is_locked}
+                          style={{ width: 28, height: 28, borderRadius: 6, border: 'none', backgroundColor: '#fff5f5', color: '#e53e3e', cursor: isDeleting || w.is_locked ? 'not-allowed' : 'pointer', opacity: isDeleting || w.is_locked ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
                           <Trash2 size={13} />
                         </button>

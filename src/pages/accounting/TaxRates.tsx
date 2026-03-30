@@ -80,8 +80,13 @@ function CreateModal({ choices, onClose, onSaved }: {
     setError(''); setLoading(true);
     try {
       // zatca_category is NOT sent — the system auto-assigns it
+      const rateNum = parseFloat(rate);
       const { data } = await api.post<TaxRate>('/api/v1/accounting/tax-rates/', {
-        name, name_ar: nameAr, tax_type: taxType, rate, description,
+        name,
+        name_ar: nameAr,
+        tax_type: taxType,
+        rate: Number.isFinite(rateNum) ? rateNum : 0,
+        description,
       });
       onSaved(data); onClose();
     } catch (err: unknown) {
@@ -304,6 +309,9 @@ export default function TaxRates() {
   const [showCreate, setShowCreate] = useState(false);
   const [editRate,   setEditRate]   = useState<TaxRate | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('');
+  const [taxTypeFilter, setTaxTypeFilter] = useState('');
+  const [zatcaFilter, setZatcaFilter] = useState('');
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tableRef    = useRef<HTMLDivElement>(null);
   type EditCol = 'name' | 'name_ar' | 'description';
@@ -317,11 +325,14 @@ export default function TaxRates() {
     try {
       const params = new URLSearchParams({ page_size: '100' });
       if (q.trim()) params.set('search', q.trim());
+      if (activeFilter) params.set('active', activeFilter);
+      if (taxTypeFilter) params.set('tax_type', taxTypeFilter);
+      if (zatcaFilter) params.set('zatca_category', zatcaFilter);
       const { data } = await api.get<{ results: TaxRate[] }>(`/api/v1/accounting/tax-rates/?${params}`);
       setTaxRates(data.results ?? []);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, []);
+  }, [activeFilter, taxTypeFilter, zatcaFilter]);
 
   const fetchChoices = useCallback(async () => {
     try {
@@ -330,12 +341,17 @@ export default function TaxRates() {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { fetchRates(); fetchChoices(); }, []);
+  useEffect(() => {
+    void fetchChoices();
+  }, [fetchChoices]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRates(search), 320);
-  }, [search]);
+    searchTimer.current = setTimeout(() => void fetchRates(search), 320);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, activeFilter, taxTypeFilter, zatcaFilter, fetchRates]);
 
   async function openEdit(rate: TaxRate) {
     try {
@@ -474,11 +490,41 @@ export default function TaxRates() {
             onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
             onBlur={(e) => (e.target.style.borderColor = '#e8e8e8')} />
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 5, height: 34, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#666', fontSize: 13.5, cursor: 'pointer' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <select
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value as '' | 'true' | 'false')}
+            style={{ height: 34, borderRadius: 7, border: '1px solid #e8e8e8', paddingInline: 8, fontSize: 13, fontFamily: "'Heebo', sans-serif", color: '#333', backgroundColor: '#fff' }}
+          >
+            <option value="">All status</option>
+            <option value="true">Active only</option>
+            <option value="false">Inactive only</option>
+          </select>
+          <select
+            value={taxTypeFilter}
+            onChange={(e) => setTaxTypeFilter(e.target.value)}
+            style={{ height: 34, borderRadius: 7, border: '1px solid #e8e8e8', paddingInline: 8, fontSize: 13, fontFamily: "'Heebo', sans-serif", color: '#333', minWidth: 140, backgroundColor: '#fff' }}
+          >
+            <option value="">All tax types</option>
+            {(choices?.tax_types ?? []).map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+          <select
+            value={zatcaFilter}
+            onChange={(e) => setZatcaFilter(e.target.value)}
+            style={{ height: 34, borderRadius: 7, border: '1px solid #e8e8e8', paddingInline: 8, fontSize: 13, fontFamily: "'Heebo', sans-serif", color: '#333', backgroundColor: '#fff' }}
+          >
+            <option value="">All ZATCA codes</option>
+            <option value="S">S — Standard</option>
+            <option value="Z">Z — Zero</option>
+            <option value="E">E — Exempt</option>
+            <option value="O">O — Out of scope</option>
+          </select>
+          <button type="button" style={{ display: 'flex', alignItems: 'center', gap: 5, height: 34, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#666', fontSize: 13.5, cursor: 'pointer' }}>
             <ArrowUpDown size={13} /> Sort
           </button>
-          <button style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 7, padding: '0 8px', height: 34, cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center' }}>
+          <button type="button" style={{ background: 'none', border: '1px solid #e0e0e0', borderRadius: 7, padding: '0 8px', height: 34, cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center' }}>
             <MoreVertical size={14} />
           </button>
           <button onClick={() => setShowCreate(true)}

@@ -5,6 +5,10 @@ import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function supplierPaymentIdempotencyKey() {
+  return crypto.randomUUID();
+}
+
 type PaymentType = 'bill_payment' | 'advance_payment';
 
 interface SupplierPayment {
@@ -21,6 +25,7 @@ interface SupplierPayment {
   payment_date: string;
   description: string;
   is_posted: boolean;
+  journal_entry?: string | null;
   amount_applied: string;
   remaining_amount: string;
   allocations: { bill: string; amount: string }[];
@@ -98,11 +103,17 @@ function PaymentsList() {
     }
   }, [search, supplier, paymentType]);
 
-  useEffect(() => { fetchMeta(); fetchRows(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, supplier, paymentType]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, supplier, paymentType, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 12px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -232,6 +243,10 @@ function PaymentEditor() {
   const [accounts, setAccounts] = useState<AccountChoice[]>([]);
   const [outstanding, setOutstanding] = useState<OutstandingBill[]>([]);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  const [paymentTypeOptions, setPaymentTypeOptions] = useState<{ id: PaymentType; label: string }[]>([
+    { id: 'bill_payment', label: 'Bill Payments' },
+    { id: 'advance_payment', label: 'Advance Payments' },
+  ]);
 
   const amountApplied = useMemo(
     () => Object.values(allocations).reduce((acc, v) => acc + (Number(v) || 0), 0),
@@ -249,7 +264,9 @@ function PaymentEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -260,14 +277,23 @@ function PaymentEditor() {
     }
   }, []);
 
-  const fetchOutstanding = useCallback(async (supplierId: string) => {
-    if (!supplierId || paymentType !== 'bill_payment') {
+  const fetchOutstanding = useCallback(async (supplierId: string, paymentTypeOverride?: PaymentType) => {
+    const pt = paymentTypeOverride ?? paymentType;
+    if (!supplierId || pt !== 'bill_payment') {
       setOutstanding([]);
       return;
     }
     try {
-      const { data } = await api.get<{ results: OutstandingBill[] }>(`/api/v1/purchases/supplier-payments/outstanding-bills/?supplier=${supplierId}`);
+      const { data } = await api.get<{
+        results: OutstandingBill[];
+        payment_types?: { id: string; label: string }[];
+      }>(`/api/v1/purchases/supplier-payments/outstanding-bills/?supplier=${encodeURIComponent(supplierId)}`);
       setOutstanding(data.results ?? []);
+      if (data.payment_types?.length) {
+        setPaymentTypeOptions(
+          data.payment_types.map((p) => ({ id: p.id as PaymentType, label: p.label })),
+        );
+      }
     } catch {
       setOutstanding([]);
     }
@@ -290,7 +316,7 @@ function PaymentEditor() {
       const allocMap: Record<string, string> = {};
       (data.allocations ?? []).forEach((a) => { allocMap[a.bill] = a.amount; });
       setAllocations(allocMap);
-      await fetchOutstanding(data.supplier ?? '');
+      await fetchOutstanding(data.supplier ?? '', data.payment_type ?? 'bill_payment');
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -298,8 +324,17 @@ function PaymentEditor() {
     }
   }, [id, isCreate, fetchOutstanding]);
 
-  useEffect(() => { fetchMeta(); fetchPayment(); }, []);
-  useEffect(() => { if (supplier) fetchOutstanding(supplier); }, [supplier, paymentType]);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchPayment();
+  }, [fetchPayment]);
+
+  useEffect(() => {
+    if (supplier) void fetchOutstanding(supplier);
+  }, [supplier, paymentType, fetchOutstanding]);
 
   function setAlloc(billId: string, val: string) {
     setAllocations((prev) => ({ ...prev, [billId]: val }));
@@ -345,7 +380,9 @@ function PaymentEditor() {
 
       const { data } = paymentId
         ? await api.patch<SupplierPayment>(`/api/v1/purchases/supplier-payments/${paymentId}/`, body)
-        : await api.post<SupplierPayment>('/api/v1/purchases/supplier-payments/', body);
+        : await api.post<SupplierPayment>('/api/v1/purchases/supplier-payments/', body, {
+            headers: { 'Idempotency-Key': supplierPaymentIdempotencyKey() },
+          });
 
       if (!id || id === 'add') nav(`/purchase/supplier-payments/${data.id}`, { replace: true });
       setPaymentId(data.id);
@@ -437,16 +474,19 @@ function PaymentEditor() {
               Payment Details
             </div>
             <div style={{ padding: 12, display: 'grid', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12.5, color: '#555' }}>Payment Type*</span>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                  <input type="radio" checked={paymentType === 'bill_payment'} onChange={() => setPaymentType('bill_payment')} style={{ accentColor: '#35C0A3' }} />
-                  Bill Payments
-                </label>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                  <input type="radio" checked={paymentType === 'advance_payment'} onChange={() => setPaymentType('advance_payment')} style={{ accentColor: '#35C0A3' }} />
-                  Advance Payments
-                </label>
+                {paymentTypeOptions.map((opt) => (
+                  <label key={opt.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                    <input
+                      type="radio"
+                      checked={paymentType === opt.id}
+                      onChange={() => setPaymentType(opt.id)}
+                      style={{ accentColor: '#35C0A3' }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
               </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>

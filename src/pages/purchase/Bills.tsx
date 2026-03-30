@@ -4,6 +4,10 @@ import { Plus, Search, SlidersHorizontal, Trash2, UploadCloud } from 'lucide-rea
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function billIdempotencyKey() {
+  return crypto.randomUUID();
+}
+
 type BillStatus = 'draft' | 'posted';
 type BillsTab = 'all' | 'to_complete' | 'to_authorize' | 'to_pay' | 'overdue' | 'paid';
 
@@ -50,6 +54,7 @@ interface BillLine {
 interface BillDetail {
   id: string;
   bill_number: string;
+  external_reference?: string | null;
   supplier: string;
   supplier_name: string;
   bill_date: string;
@@ -205,14 +210,16 @@ function BillsList() {
   }, [search, status, supplier, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchSuppliers();
-    fetchRows();
-  }, []);
+    void fetchSuppliers();
+  }, [fetchSuppliers]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, status, supplier, dateFrom, dateTo]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, status, supplier, dateFrom, dateTo, fetchRows]);
 
   const TH: React.CSSProperties = {
     padding: '10px 10px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -427,6 +434,7 @@ function BillsEditor() {
   const [status, setStatus] = useState<BillStatus>('draft');
 
   const [billNumber, setBillNumber] = useState('');
+  const [externalReference, setExternalReference] = useState('');
   const [supplier, setSupplier] = useState('');
   const [billDate, setBillDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -445,6 +453,12 @@ function BillsEditor() {
   const [suppliers, setSuppliers] = useState<SupplierChoice[]>([]);
   const [accounts, setAccounts] = useState<AccountChoice[]>([]);
   const [taxRates, setTaxRates] = useState<TaxRateChoice[]>([]);
+
+  /** Optional overrides for POST …/post/ (§13.6) */
+  const [postPayableAccount, setPostPayableAccount] = useState('');
+  const [postVatAccount, setPostVatAccount] = useState('');
+  const [postingDate, setPostingDate] = useState('');
+  const [postMemo, setPostMemo] = useState('');
 
   const canEdit = status === 'draft';
 
@@ -470,7 +484,9 @@ function BillsEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -492,11 +508,16 @@ function BillsEditor() {
       setBillId(data.id);
       setStatus(data.status);
       setBillNumber(data.bill_number ?? '');
+      setExternalReference(data.external_reference ?? '');
       setSupplier(data.supplier ?? '');
       setBillDate(data.bill_date ?? '');
       setDueDate(data.due_date ?? '');
       setNote(data.note ?? '');
       setAttachmentName(data.attachment ?? '');
+      setPostPayableAccount('');
+      setPostVatAccount('');
+      setPostingDate('');
+      setPostMemo('');
       setLines((data.lines ?? []).map((l) => ({
         id: l.id,
         ...parseLineDescription((l as unknown as { description?: string }).description),
@@ -514,9 +535,12 @@ function BillsEditor() {
   }, [id, isCreate]);
 
   useEffect(() => {
-    fetchMeta();
-    fetchBill();
-  }, []);
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchBill();
+  }, [fetchBill]);
 
   function setLine(idx: number, patch: Partial<BillLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -538,6 +562,7 @@ function BillsEditor() {
     try {
       const body = {
         bill_number: billNumber,
+        external_reference: externalReference.trim() || null,
         supplier,
         bill_date: billDate,
         due_date: dueDate || null,
@@ -551,15 +576,21 @@ function BillsEditor() {
           discount_percent: l.discount_percent || '0',
         })),
       };
+      const idemHeader = { headers: { 'Idempotency-Key': billIdempotencyKey() } };
       const { data } = billId
-        ? await api.patch<BillDetail>(`/api/v1/purchases/bills/${billId}/`, body)
-        : await api.post<BillDetail>('/api/v1/purchases/bills/', body);
+        ? await api.patch<BillDetail>(`/api/v1/purchases/bills/${billId}/`, body, idemHeader)
+        : await api.post<BillDetail>('/api/v1/purchases/bills/', body, idemHeader);
 
       // optional attachment upload via patch multipart
       if (attachmentFile && data.id) {
         const fd = new FormData();
         fd.append('attachment', attachmentFile);
-        await api.patch(`/api/v1/purchases/bills/${data.id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.patch(`/api/v1/purchases/bills/${data.id}/`, fd, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Idempotency-Key': billIdempotencyKey(),
+          },
+        });
       }
 
       setBillId(data.id);
@@ -585,7 +616,17 @@ function BillsEditor() {
     setPosting(true);
     setError('');
     try {
-      const { data } = await api.post<BillDetail>(`/api/v1/purchases/bills/${targetId}/post/`, {});
+      const postBody: Record<string, unknown> = {};
+      if (postPayableAccount) postBody.payable_account = postPayableAccount;
+      if (postVatAccount) postBody.vat_account = postVatAccount;
+      if (postingDate.trim()) postBody.posting_date = postingDate.trim();
+      if (postMemo.trim()) postBody.memo = postMemo.trim();
+
+      const { data } = await api.post<BillDetail>(
+        `/api/v1/purchases/bills/${targetId}/post/`,
+        postBody,
+        { headers: { 'Idempotency-Key': billIdempotencyKey() } },
+      );
       setStatus(data.status);
       if (!id || id === 'add') nav(`/purchase/bills/${targetId}`, { replace: true });
     } catch (err) {
@@ -599,7 +640,9 @@ function BillsEditor() {
     if (!billId) return;
     if (!window.confirm('Delete this draft bill?')) return;
     try {
-      await api.delete(`/api/v1/purchases/bills/${billId}/`);
+      await api.delete(`/api/v1/purchases/bills/${billId}/`, {
+        headers: { 'Idempotency-Key': billIdempotencyKey() },
+      });
       nav('/purchase/bills');
     } catch (err) {
       alert(parseApiError(err));
@@ -661,6 +704,9 @@ function BillsEditor() {
                 <span style={{ fontSize: 12.5, color: '#555' }}>Bill Number*</span>
                 <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Empty" />
 
+                <span style={{ fontSize: 12.5, color: '#555' }}>External ref.</span>
+                <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional — ERP dedupe id" title="Must be unique per supplier when set" />
+
                 <span style={{ fontSize: 12.5, color: '#555' }}>Supplier*</span>
                 <select value={supplier} onChange={(e) => setSupplier(e.target.value)} disabled={!canEdit} style={{ ...inputSt, cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#fff' : '#f5f5f5' }}>
                   <option value="">Select</option>
@@ -672,6 +718,32 @@ function BillsEditor() {
 
                 <span style={{ fontSize: 12.5, color: '#555' }}>Due Date*</span>
                 <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
+
+                {canEdit && (
+                  <>
+                    <span style={{ gridColumn: '1 / -1', fontSize: 11.5, fontWeight: 600, color: '#6b7280', marginTop: 6, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
+                      Confirm &amp; post — optional overrides (defaults: AP 211, VAT 116)
+                    </span>
+                    <span style={{ fontSize: 12.5, color: '#555' }}>Payable acct.</span>
+                    <select value={postPayableAccount} onChange={(e) => setPostPayableAccount(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
+                      <option value="">Use default</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: 12.5, color: '#555' }}>VAT acct.</span>
+                    <select value={postVatAccount} onChange={(e) => setPostVatAccount(e.target.value)} style={{ ...inputSt, cursor: 'pointer' }}>
+                      <option value="">Use default</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                      ))}
+                    </select>
+                    <span style={{ fontSize: 12.5, color: '#555' }}>Posting date</span>
+                    <input type="date" value={postingDate} onChange={(e) => setPostingDate(e.target.value)} style={inputSt} />
+                    <span style={{ fontSize: 12.5, color: '#555' }}>Post memo</span>
+                    <input value={postMemo} onChange={(e) => setPostMemo(e.target.value)} style={inputSt} placeholder="Optional journal memo" />
+                  </>
+                )}
               </div>
             </div>
 

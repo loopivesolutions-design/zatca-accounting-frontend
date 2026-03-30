@@ -453,9 +453,10 @@ export default function UserRoleManagement() {
   const fetchRoles = useCallback(async () => {
     setLoadingRoles(true);
     try {
-      const { data } = await api.get<Role[]>('/api/v1/user/management/roles/');
-      setRoles(data);
-      if (data.length > 0) setSelectedRoleId((prev) => prev ?? data[0].id);
+      const { data } = await api.get<Role[] | { results: Role[] }>('/api/v1/user/management/roles/');
+      const list = Array.isArray(data) ? data : data.results ?? [];
+      setRoles(list);
+      if (list.length > 0) setSelectedRoleId((prev) => prev ?? list[0].id);
     } catch { /* silent */ }
     finally { setLoadingRoles(false); }
   }, []);
@@ -481,8 +482,17 @@ export default function UserRoleManagement() {
     if (!selectedRoleId) return;
     setSaving(true);
     try {
-      const role = roles.find((r) => r.id === selectedRoleId);
-      await api.put(`/api/v1/user/management/roles/${selectedRoleId}/permissions/`, { id: selectedRoleId, name: role?.name, permissions });
+      const payload = {
+        permissions: permissions.map(({ module, can_view, can_create, can_edit, can_delete, can_approve }) => ({
+          module,
+          can_view,
+          can_create,
+          can_edit,
+          can_delete,
+          can_approve,
+        })),
+      };
+      await api.put(`/api/v1/user/management/roles/${selectedRoleId}/permissions/`, payload);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2500);
     } catch { /* silent */ }

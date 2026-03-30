@@ -11,6 +11,7 @@ import {
   BookOpen,
   BarChart2,
   Settings,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export type SidebarIcon = ComponentType<LucideProps>;
@@ -84,7 +85,18 @@ export const sidebarConfig: SidebarGroup[] = [
       },
       { id: 'vat', label: 'VAT & ZATCA', icon: Receipt, path: '/vat-zatca' },
       { id: 'banking', label: 'Banking', icon: Landmark, path: '/banking' },
-      { id: 'reports', label: 'Reports', icon: BarChart2, path: '/reports' },
+      {
+        id: 'reports',
+        label: 'Reports',
+        icon: BarChart2,
+        path: '/reports',
+        matchPaths: ['/reports'],
+        children: [
+          { id: 'statement_of_account', label: 'Statement of Account', path: '/reports/statement-of-account' },
+          { id: 'profit_and_loss', label: 'Profit and Loss', path: '/reports/profit-and-loss' },
+          { id: 'general_ledger', label: 'General Ledger', path: '/reports/general-ledger' },
+        ],
+      },
     ],
   },
   {
@@ -131,10 +143,11 @@ export const sidebarConfig: SidebarGroup[] = [
         label: 'Accounting',
         icon: BookOpen,
         path: '/accounting',
-        exact: true, // avoid highlighting for /accounting/tax-rates
+        matchPaths: ['/accounting', '/accounting/tax-rates', '/accounting/journal-entries'],
         children: [
           { id: 'chart_of_accounts', label: 'Chart of Accounts', path: '/accounting' },
           { id: 'tax_rates', label: 'Tax Rates', path: '/accounting/tax-rates' },
+          { id: 'journal_entries', label: 'Journal Entries', path: '/accounting/journal-entries' },
         ],
       },
     ],
@@ -149,9 +162,11 @@ export const sidebarConfig: SidebarGroup[] = [
         icon: Settings,
         path: '/settings',
         exact: true, // avoid highlighting for /settings/company-settings
+        matchPaths: ['/settings', '/settings/company-settings', '/settings/approvals'],
         children: [
           { id: 'user_roles', label: 'Users & Roles', path: '/settings' },
           { id: 'org_settings', label: 'Organization', path: '/settings/company-settings' },
+          { id: 'approvals', label: 'Approvals', path: '/settings/approvals', icon: ClipboardCheck },
         ],
       },
     ],
@@ -185,6 +200,9 @@ export const sidebarRouteMap: { route: string; sidebarIdPath: string }[] = [
   { route: '/customers/add', sidebarIdPath: 'ops.customers' },
   { route: '/banking', sidebarIdPath: 'ops.banking' },
   { route: '/reports', sidebarIdPath: 'ops.reports' },
+  { route: '/reports/statement-of-account', sidebarIdPath: 'ops.reports.statement_of_account' },
+  { route: '/reports/profit-and-loss', sidebarIdPath: 'ops.reports.profit_and_loss' },
+  { route: '/reports/general-ledger', sidebarIdPath: 'ops.reports.general_ledger' },
 
   { route: '/products/items', sidebarIdPath: 'products.products.items' },
   { route: '/products/categories', sidebarIdPath: 'products.products.categories' },
@@ -194,8 +212,11 @@ export const sidebarRouteMap: { route: string; sidebarIdPath: string }[] = [
 
   { route: '/accounting', sidebarIdPath: 'accounting.accounting.chart_of_accounts' },
   { route: '/accounting/tax-rates', sidebarIdPath: 'accounting.accounting.tax_rates' },
+  { route: '/accounting/journal-entries', sidebarIdPath: 'accounting.accounting.journal_entries' },
+  { route: '/accounting/journal-entries/:id', sidebarIdPath: 'accounting.accounting.journal_entries' },
 
   { route: '/settings', sidebarIdPath: 'admin.settings.user_roles' },
   { route: '/settings/company-settings', sidebarIdPath: 'admin.settings.org_settings' },
+  { route: '/settings/approvals', sidebarIdPath: 'admin.settings.approvals' },
 ];
 

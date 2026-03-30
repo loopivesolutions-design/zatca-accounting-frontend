@@ -5,6 +5,10 @@ import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function customerRefundIdempotencyKey() {
+  return crypto.randomUUID();
+}
+
 interface CustomerRefund {
   id: string;
   refund_number: string;
@@ -17,6 +21,7 @@ interface CustomerRefund {
   refund_date: string;
   description: string;
   is_posted: boolean;
+  journal_entry?: string | null;
   amount_applied: string;
   remaining_amount: string;
   allocations: { credit_note: string; amount: string }[];
@@ -92,11 +97,17 @@ function RefundsList() {
     }
   }, [search, customer]);
 
-  useEffect(() => { fetchMeta(); fetchRows(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, customer]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, customer, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 12px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -232,7 +243,9 @@ function RefundEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -249,7 +262,9 @@ function RefundEditor() {
       return;
     }
     try {
-      const { data } = await api.get<{ results: OutstandingCreditNote[] }>(`/api/v1/sales/customer-refunds/outstanding-credit-notes/?customer=${customerId}`);
+      const { data } = await api.get<{ results: OutstandingCreditNote[] }>(
+        `/api/v1/sales/customer-refunds/outstanding-credit-notes/?customer=${encodeURIComponent(customerId)}`,
+      );
       setOutstanding(data.results ?? []);
     } catch {
       setOutstanding([]);
@@ -280,8 +295,17 @@ function RefundEditor() {
     }
   }, [id, isCreate, fetchOutstanding]);
 
-  useEffect(() => { fetchMeta(); fetchRefund(); }, []);
-  useEffect(() => { if (customer) fetchOutstanding(customer); }, [customer]);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchRefund();
+  }, [fetchRefund]);
+
+  useEffect(() => {
+    if (customer) void fetchOutstanding(customer);
+  }, [customer, fetchOutstanding]);
 
   function setAlloc(creditNoteId: string, val: string) {
     setAllocations((prev) => ({ ...prev, [creditNoteId]: val }));
@@ -322,7 +346,9 @@ function RefundEditor() {
 
       const { data } = refundId
         ? await api.patch<CustomerRefund>(`/api/v1/sales/customer-refunds/${refundId}/`, body)
-        : await api.post<CustomerRefund>('/api/v1/sales/customer-refunds/', body);
+        : await api.post<CustomerRefund>('/api/v1/sales/customer-refunds/', body, {
+            headers: { 'Idempotency-Key': customerRefundIdempotencyKey() },
+          });
 
       if (!id || id === 'add') nav(`/sales/customer-refunds/${data.id}`, { replace: true });
       setRefundId(data.id);

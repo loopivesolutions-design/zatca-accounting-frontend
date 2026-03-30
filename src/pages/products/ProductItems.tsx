@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, X, Lock } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
@@ -13,10 +13,14 @@ interface Item {
   unit_of_measure: string | null;
   unit_of_measure_name: string | null;
   image: string | null;
+  has_attachment?: boolean;
   is_active: boolean;
   selling_price: string;
   purchase_price: string;
+  avg_unit_cost?: string;
   stock_quantity: string;
+  inventory_value?: string;
+  is_locked?: boolean;
   revenue_account: string | null;
   revenue_account_name: string | null;
   expense_account: string | null;
@@ -881,6 +885,7 @@ export default function ProductItems() {
   const [items, setItems] = useState<Item[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -904,13 +909,14 @@ export default function ProductItems() {
   }, []);
 
   const fetchItems = useCallback(
-    async (q = '', af: ActiveFilter = 'all') => {
+    async (q: string, af: ActiveFilter, cat: string) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({ page_size: '100' });
         if (q.trim()) params.set('search', q.trim());
         if (af === 'active') params.set('active', 'true');
         if (af === 'inactive') params.set('active', 'false');
+        if (cat) params.set('category', cat);
         const { data } = await api.get<{ count: number; results: Item[] }>(
           `/api/v1/products/items/?${params}`,
         );
@@ -926,13 +932,14 @@ export default function ProductItems() {
   );
 
   useEffect(() => {
-    fetchItems('', activeFilter);
-  }, []);
-
-  useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchItems(search, activeFilter), 320);
-  }, [search, activeFilter]);
+    searchTimer.current = setTimeout(() => {
+      void fetchItems(search, activeFilter, categoryFilter);
+    }, 320);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, activeFilter, categoryFilter, fetchItems]);
 
   // Lookup data
   useEffect(() => {
@@ -1064,6 +1071,32 @@ export default function ProductItems() {
           />
         </div>
 
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          style={{
+            height: 36,
+            minWidth: 180,
+            maxWidth: 240,
+            paddingInline: 10,
+            borderRadius: 8,
+            border: `1px solid ${categoryFilter ? '#35C0A3' : '#e0e0e0'}`,
+            backgroundColor: categoryFilter ? '#f0fdf9' : '#fff',
+            color: categoryFilter ? '#35C0A3' : '#555',
+            fontSize: 13.5,
+            outline: 'none',
+            cursor: 'pointer',
+            fontFamily: "'Heebo', sans-serif",
+          }}
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+
         {/* Filter + Add */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div ref={filterRef} style={{ position: 'relative' }}>
@@ -1179,6 +1212,9 @@ export default function ProductItems() {
               <th style={{ ...TH, textAlign: 'right' }}>Selling</th>
               <th style={{ ...TH, textAlign: 'right' }}>Purchase</th>
               <th style={{ ...TH, textAlign: 'right' }}>Stock</th>
+              <th style={{ ...TH, textAlign: 'right' }}>Avg cost</th>
+              <th style={{ ...TH, textAlign: 'right' }}>Inv. value</th>
+              <th style={{ ...TH, textAlign: 'center', width: 44 }}> </th>
               <th style={TH}>Status</th>
               <th style={{ ...TH, width: 80 }} />
             </tr>
@@ -1187,7 +1223,7 @@ export default function ProductItems() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={13}
                   style={{
                     ...TD,
                     textAlign: 'center',
@@ -1212,7 +1248,7 @@ export default function ProductItems() {
             ) : items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={13}
                   style={{
                     ...TD,
                     textAlign: 'center',
@@ -1222,7 +1258,7 @@ export default function ProductItems() {
                     borderRight: 'none',
                   }}
                 >
-                  {search || activeFilter !== 'all'
+                  {search || activeFilter !== 'all' || categoryFilter
                     ? 'No items match your filters.'
                     : 'No items yet. Click Add to create one.'}
                 </td>
@@ -1300,6 +1336,15 @@ export default function ProductItems() {
                     >
                       {item.stock_quantity}
                     </td>
+                    <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>
+                      {item.avg_unit_cost ?? item.purchase_price ?? '—'}
+                    </td>
+                    <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#374151' }}>
+                      {item.inventory_value ?? '—'}
+                    </td>
+                    <td style={{ ...TD, textAlign: 'center' }} title={item.is_locked ? 'Used on documents — cannot delete' : ''}>
+                      {item.is_locked ? <Lock size={14} style={{ color: '#f59e0b' }} /> : '—'}
+                    </td>
                     <td style={TD}>
                       <span
                         style={{
@@ -1349,7 +1394,7 @@ export default function ProductItems() {
                         </button>
                         <button
                           onClick={() => deleteItem(item)}
-                          disabled={deletingId === item.id}
+                          disabled={deletingId === item.id || item.is_locked}
                           style={{
                             width: 28,
                             height: 28,
@@ -1357,8 +1402,8 @@ export default function ProductItems() {
                             border: 'none',
                             backgroundColor: '#fff5f5',
                             color: '#e53e3e',
-                            cursor: deletingId === item.id ? 'not-allowed' : 'pointer',
-                            opacity: deletingId === item.id ? 0.5 : 1,
+                            cursor: deletingId === item.id || item.is_locked ? 'not-allowed' : 'pointer',
+                            opacity: deletingId === item.id || item.is_locked ? 0.5 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

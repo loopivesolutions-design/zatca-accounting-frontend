@@ -176,9 +176,7 @@ export default function CompanySettingsPage() {
           if (v === undefined || v === null) continue;
           fd.append(String(k), String(v));
         }
-        const { data: out } = await api.post<CompanySettings>('/api/v1/main/company-settings/', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        const { data: out } = await api.patch<CompanySettings>('/api/v1/main/company-settings/', fd);
         res = out;
       } else {
         const body: Record<string, unknown> = {};
@@ -200,8 +198,7 @@ export default function CompanySettingsPage() {
           const v = (draft as any)[k];
           if (v !== undefined) body[String(k)] = v;
         }
-        // POST acts as upsert (create/update)
-        const { data: out } = await api.post<CompanySettings>('/api/v1/main/company-settings/', body);
+        const { data: out } = await api.patch<CompanySettings>('/api/v1/main/company-settings/', body);
         res = out;
       }
 

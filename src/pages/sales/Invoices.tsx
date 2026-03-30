@@ -4,8 +4,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Search, SlidersHorizontal, Trash2, UploadCloud } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
+import { ZatcaSubmissionLogsPanel, type ZatcaSubmissionLogRow } from '../../components/ZatcaSubmissionLogsPanel';
+
+function invoiceIdempotencyKey() {
+  return crypto.randomUUID();
+}
 
 type InvoiceStatus = 'draft' | 'posted' | 'paid' | 'partially_paid' | 'overdue';
+type ZatcaSubmissionStatus = 'not_submitted' | 'pending' | 'reported' | 'cleared' | 'rejected' | 'failed';
 
 interface Choice { id: string; label: string; }
 interface CustomerChoice { id: string; company_name: string; }
@@ -43,6 +49,7 @@ interface InvoiceLine {
 interface InvoiceDetail {
   id: string;
   invoice_number: string;
+  external_reference?: string | null;
   customer: string;
   customer_name: string;
   date: string;
@@ -53,6 +60,17 @@ interface InvoiceDetail {
   status_display: string;
   posted_at: string | null;
   qr_code_text: string | null;
+  zatca_uuid?: string | null;
+  zatca_previous_hash?: string | null;
+  zatca_invoice_hash?: string | null;
+  zatca_signed_hash?: string | null;
+  zatca_submission_status?: ZatcaSubmissionStatus | string;
+  zatca_submission_type?: string | null;
+  zatca_submission_reference?: string | null;
+  zatca_submission_error?: string | null;
+  zatca_submitted_at?: string | null;
+  zatca_cleared_at?: string | null;
+  zatca_submission_logs?: ZatcaSubmissionLogRow[];
   journal_entry: string | null;
   subtotal: string;
   total_vat: string;
@@ -127,7 +145,13 @@ function InvoicesList() {
         api.get<{ statuses?: Choice[]; invoice_statuses?: Choice[] }>('/api/v1/sales/invoices/choices/'),
         api.get<{ results: any[] }>('/api/v1/sales/customers/?page_size=200&active=true'),
       ]);
-      setStatuses(iRes.data.statuses ?? iRes.data.invoice_statuses ?? []);
+      setStatuses(iRes.data.statuses ?? iRes.data.invoice_statuses ?? [
+        { id: 'draft', label: 'Draft' },
+        { id: 'posted', label: 'Posted' },
+        { id: 'paid', label: 'Paid' },
+        { id: 'partially_paid', label: 'Partially paid' },
+        { id: 'overdue', label: 'Overdue' },
+      ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
     } catch {
       /* silent */
@@ -153,11 +177,17 @@ function InvoicesList() {
     }
   }, [search, status, customer, dateFrom, dateTo]);
 
-  useEffect(() => { fetchMeta(); fetchRows(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, status, customer, dateFrom, dateTo]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, status, customer, dateFrom, dateTo, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 10px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -287,6 +317,7 @@ function InvoicesEditor() {
   const [status, setStatus] = useState<InvoiceStatus>('draft');
 
   const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [externalReference, setExternalReference] = useState('');
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -294,7 +325,12 @@ function InvoicesEditor() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentName, setAttachmentName] = useState('');
   const [priceMode, setPriceMode] = useState<'inc_tax' | 'ex_tax'>('inc_tax');
-  const [qrCodeText, setQrCodeText] = useState('');
+  const [postNotice, setPostNotice] = useState('');
+  const [zatcaSubmitting, setZatcaSubmitting] = useState(false);
+  const [zatcaVerifying, setZatcaVerifying] = useState(false);
+  const [zatcaSubmissionType, setZatcaSubmissionType] = useState<'clearance' | 'reporting'>('clearance');
+  const [zatcaVerifyResult, setZatcaVerifyResult] = useState<{ stored_hash: string; computed_hash: string; is_valid: boolean } | null>(null);
+  const [zatcaSubmissionLogs, setZatcaSubmissionLogs] = useState<ZatcaSubmissionLogRow[]>([]);
   const [lines, setLines] = useState<InvoiceLine[]>([
     { product: null, description: '', account: null, quantity: '1', unit_price: '', tax_rate: null, discount_percent: '0' },
   ]);
@@ -305,6 +341,10 @@ function InvoicesEditor() {
   const [accounts, setAccounts] = useState<AccountChoice[]>([]);
   const [issuer, setIssuer] = useState<InvoiceDetail['issuer_details'] | null>(null);
   const [invoiceQrFromApi, setInvoiceQrFromApi] = useState('');
+  const [zatcaDetail, setZatcaDetail] = useState<Partial<Pick<InvoiceDetail,
+    'zatca_uuid' | 'zatca_invoice_hash' | 'zatca_submission_status' | 'zatca_submission_type' |
+    'zatca_submission_reference' | 'zatca_submission_error' | 'zatca_submitted_at' | 'zatca_cleared_at'
+  >> | null>(null);
 
   const canEdit = status === 'draft';
 
@@ -335,7 +375,9 @@ function InvoicesEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -362,6 +404,19 @@ function InvoicesEditor() {
       setAttachmentName(data.attachment ?? '');
       setIssuer(data.issuer_details ?? null);
       setInvoiceQrFromApi(data.qr_code_text ?? '');
+      setZatcaDetail({
+        zatca_uuid: data.zatca_uuid,
+        zatca_invoice_hash: data.zatca_invoice_hash,
+        zatca_submission_status: data.zatca_submission_status,
+        zatca_submission_type: data.zatca_submission_type,
+        zatca_submission_reference: data.zatca_submission_reference,
+        zatca_submission_error: data.zatca_submission_error,
+        zatca_submitted_at: data.zatca_submitted_at,
+        zatca_cleared_at: data.zatca_cleared_at,
+      });
+      setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
+      setPostNotice('');
+      setZatcaVerifyResult(null);
       setLines((data.lines ?? []).map((l) => ({
         id: l.id,
         product: l.product ?? null,
@@ -379,7 +434,13 @@ function InvoicesEditor() {
     }
   }, [id, isCreate]);
 
-  useEffect(() => { fetchMeta(); fetchInvoice(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchInvoice();
+  }, [fetchInvoice]);
 
   function setLine(idx: number, patch: Partial<InvoiceLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -399,7 +460,7 @@ function InvoicesEditor() {
     setSaving(true);
     setError('');
     try {
-      const body = {
+      const body: Record<string, unknown> = {
         invoice_number: invoiceNumber,
         customer,
         date,
@@ -415,19 +476,38 @@ function InvoicesEditor() {
           discount_percent: l.discount_percent || '0',
         })),
       };
+      if (externalReference.trim()) body.external_reference = externalReference.trim();
+      else body.external_reference = null;
+
+      const idem = { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } };
       const { data } = invoiceId
-        ? await api.patch<InvoiceDetail>(`/api/v1/sales/invoices/${invoiceId}/`, body)
-        : await api.post<InvoiceDetail>('/api/v1/sales/invoices/', body);
+        ? await api.patch<InvoiceDetail>(`/api/v1/sales/invoices/${invoiceId}/`, body, idem)
+        : await api.post<InvoiceDetail>('/api/v1/sales/invoices/', body, idem);
 
       if (attachmentFile && data.id) {
         const fd = new FormData();
         fd.append('attachment', attachmentFile);
-        await api.patch(`/api/v1/sales/invoices/${data.id}/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await api.patch(`/api/v1/sales/invoices/${data.id}/`, fd, {
+          headers: { 'Idempotency-Key': invoiceIdempotencyKey() },
+        });
       }
 
       setInvoiceId(data.id);
       setStatus(data.status);
+      setExternalReference(data.external_reference ?? '');
       setIssuer(data.issuer_details ?? null);
+      setInvoiceQrFromApi(data.qr_code_text ?? '');
+      setZatcaDetail({
+        zatca_uuid: data.zatca_uuid,
+        zatca_invoice_hash: data.zatca_invoice_hash,
+        zatca_submission_status: data.zatca_submission_status,
+        zatca_submission_type: data.zatca_submission_type,
+        zatca_submission_reference: data.zatca_submission_reference,
+        zatca_submission_error: data.zatca_submission_error,
+        zatca_submitted_at: data.zatca_submitted_at,
+        zatca_cleared_at: data.zatca_cleared_at,
+      });
+      setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
       if (navigateAfterCreate && (!id || id === 'add')) nav(`/sales/invoices/${data.id}`, { replace: true });
       return data.id;
     } catch (err) {
@@ -447,11 +527,32 @@ function InvoicesEditor() {
     }
     setPosting(true);
     setError('');
+    setPostNotice('');
     try {
-      const payload = qrCodeText.trim() ? { qr_code_text: qrCodeText.trim() } : {};
-      const { data } = await api.post<InvoiceDetail>(`/api/v1/sales/invoices/${targetId}/post/`, payload);
+      const response = await api.post<InvoiceDetail>(
+        `/api/v1/sales/invoices/${targetId}/post/`,
+        {},
+        { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } },
+      );
+      if (response.status === 202) {
+        setPostNotice('This invoice was submitted for approval. Posting will complete after approval (maker–checker).');
+        if (!id || id === 'add') nav(`/sales/invoices/${targetId}`, { replace: true });
+        return;
+      }
+      const data = response.data;
       setStatus(data.status);
       setInvoiceQrFromApi(data.qr_code_text ?? '');
+      setZatcaDetail({
+        zatca_uuid: data.zatca_uuid,
+        zatca_invoice_hash: data.zatca_invoice_hash,
+        zatca_submission_status: data.zatca_submission_status,
+        zatca_submission_type: data.zatca_submission_type,
+        zatca_submission_reference: data.zatca_submission_reference,
+        zatca_submission_error: data.zatca_submission_error,
+        zatca_submitted_at: data.zatca_submitted_at,
+        zatca_cleared_at: data.zatca_cleared_at,
+      });
+      setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
       if (!id || id === 'add') nav(`/sales/invoices/${targetId}`, { replace: true });
     } catch (err) {
       setError(parseApiError(err));
@@ -460,11 +561,58 @@ function InvoicesEditor() {
     }
   }
 
+  async function submitZatca() {
+    if (!invoiceId || status !== 'posted') return;
+    setZatcaSubmitting(true);
+    setError('');
+    try {
+      const { data } = await api.post<InvoiceDetail>(
+        `/api/v1/sales/invoices/${invoiceId}/zatca/submit/`,
+        { submission_type: zatcaSubmissionType },
+        { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } },
+      );
+      setZatcaDetail({
+        zatca_uuid: data.zatca_uuid,
+        zatca_invoice_hash: data.zatca_invoice_hash,
+        zatca_submission_status: data.zatca_submission_status,
+        zatca_submission_type: data.zatca_submission_type,
+        zatca_submission_reference: data.zatca_submission_reference,
+        zatca_submission_error: data.zatca_submission_error,
+        zatca_submitted_at: data.zatca_submitted_at,
+        zatca_cleared_at: data.zatca_cleared_at,
+      });
+      setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setZatcaSubmitting(false);
+    }
+  }
+
+  async function verifyZatcaHash() {
+    if (!invoiceId || status !== 'posted') return;
+    setZatcaVerifying(true);
+    setError('');
+    setZatcaVerifyResult(null);
+    try {
+      const { data } = await api.get<{ stored_hash: string; computed_hash: string; is_valid: boolean }>(
+        `/api/v1/sales/invoices/${invoiceId}/zatca/verify/`,
+      );
+      setZatcaVerifyResult(data);
+    } catch (err) {
+      setError(parseApiError(err));
+    } finally {
+      setZatcaVerifying(false);
+    }
+  }
+
   async function deleteInvoice() {
     if (!invoiceId) return;
     if (!window.confirm('Delete this invoice?')) return;
     try {
-      await api.delete(`/api/v1/sales/invoices/${invoiceId}/`);
+      await api.delete(`/api/v1/sales/invoices/${invoiceId}/`, {
+        headers: { 'Idempotency-Key': invoiceIdempotencyKey() },
+      });
       nav('/sales/invoices');
     } catch (err) {
       alert(parseApiError(err));
@@ -511,6 +659,9 @@ function InvoicesEditor() {
           </div>
         </div>
 
+        {postNotice && (
+          <div style={{ margin: 12, backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>{postNotice}</div>
+        )}
         {error && <div style={{ margin: 12, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>{error}</div>}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.9fr)', gap: 14, padding: 14 }}>
@@ -528,6 +679,8 @@ function InvoicesEditor() {
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
               <span style={{ fontSize: 12.5, color: '#555' }}>Invoice #*</span>
               <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
+              <span style={{ fontSize: 12.5, color: '#555' }}>External ref.</span>
+              <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional ERP reference" />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -652,13 +805,67 @@ function InvoicesEditor() {
             </div>
 
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, padding: 10 }}>
-              <div style={{ fontSize: 12.5, color: '#555', marginBottom: 6 }}>ZATCA QR payload (optional for post)</div>
-              <textarea value={qrCodeText} onChange={(e) => setQrCodeText(e.target.value)} disabled={!canEdit}
-                style={{ ...inputSt, minHeight: 58, height: 58, paddingTop: 8, resize: 'vertical' }} placeholder="BASE64_OR_TEXT_FOR_ZATCA_QR" />
-              {!canEdit && invoiceQrFromApi && (
-                <div style={{ marginTop: 8, fontSize: 11.5, color: '#6b7280', wordBreak: 'break-all' }}>
-                  Posted QR: {invoiceQrFromApi}
-                </div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 8 }}>ZATCA</div>
+              {status !== 'posted' ? (
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>QR and submission tools appear after the invoice is posted.</div>
+              ) : (
+                <>
+                  {invoiceQrFromApi ? (
+                    <div style={{ marginBottom: 10, fontSize: 11.5, color: '#374151', wordBreak: 'break-all', lineHeight: 1.45 }}>
+                      <span style={{ fontWeight: 500, color: '#6b7280' }}>QR payload</span>
+                      <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11 }}>{invoiceQrFromApi.length > 280 ? `${invoiceQrFromApi.slice(0, 280)}…` : invoiceQrFromApi}</div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10 }}>No QR payload yet.</div>
+                  )}
+                  <div style={{ display: 'grid', gap: 6, fontSize: 12, color: '#4b5563', marginBottom: 10 }}>
+                    <div><span style={{ color: '#9ca3af' }}>Submission status</span>{' '}
+                      <strong>{String(zatcaDetail?.zatca_submission_status ?? 'not_submitted')}</strong>
+                      {zatcaDetail?.zatca_submission_type ? ` (${zatcaDetail.zatca_submission_type})` : ''}
+                    </div>
+                    {zatcaDetail?.zatca_uuid ? <div style={{ wordBreak: 'break-all' }}><span style={{ color: '#9ca3af' }}>UUID</span> {zatcaDetail.zatca_uuid}</div> : null}
+                    {zatcaDetail?.zatca_submission_reference ? <div style={{ wordBreak: 'break-all' }}><span style={{ color: '#9ca3af' }}>Reference</span> {zatcaDetail.zatca_submission_reference}</div> : null}
+                    {zatcaDetail?.zatca_submission_error ? <div style={{ color: '#b91c1c' }}>{zatcaDetail.zatca_submission_error}</div> : null}
+                  </div>
+                  {['cleared', 'reported'].includes(String(zatcaDetail?.zatca_submission_status ?? '')) ? null : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                      <select
+                        value={zatcaSubmissionType}
+                        onChange={(e) => setZatcaSubmissionType(e.target.value as 'clearance' | 'reporting')}
+                        style={{ ...inputSt, width: 140, height: 32 }}
+                      >
+                        <option value="clearance">Clearance</option>
+                        <option value="reporting">Reporting</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => { void submitZatca(); }}
+                        disabled={zatcaSubmitting}
+                        style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: zatcaSubmitting ? '#a8e4d8' : '#1d4ed8', color: '#fff', cursor: zatcaSubmitting ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600 }}
+                      >
+                        {zatcaSubmitting ? 'Submitting…' : 'Submit to ZATCA'}
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { void verifyZatcaHash(); }}
+                    disabled={zatcaVerifying}
+                    style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#374151', cursor: zatcaVerifying ? 'not-allowed' : 'pointer', fontSize: 13 }}
+                  >
+                    {zatcaVerifying ? 'Verifying…' : 'Verify hash integrity'}
+                  </button>
+                  {zatcaVerifyResult ? (
+                    <div style={{ marginTop: 10, fontSize: 12, color: zatcaVerifyResult.is_valid ? '#15803d' : '#b91c1c' }}>
+                      {zatcaVerifyResult.is_valid ? 'Hash matches stored XML.' : 'Hash mismatch — see stored vs computed.'}
+                      <div style={{ marginTop: 6, fontFamily: 'monospace', fontSize: 10.5, wordBreak: 'break-all', color: '#6b7280' }}>
+                        Stored: {zatcaVerifyResult.stored_hash}<br />
+                        Computed: {zatcaVerifyResult.computed_hash}
+                      </div>
+                    </div>
+                  ) : null}
+                  <ZatcaSubmissionLogsPanel logs={zatcaSubmissionLogs} />
+                </>
               )}
             </div>
 

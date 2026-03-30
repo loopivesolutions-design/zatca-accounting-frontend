@@ -1,12 +1,15 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
+import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
+import AcceptInvitation from './pages/AcceptInvitation';
 import Placeholder from './pages/Placeholder';
 import UserRoleManagement from './pages/settings/UserRoleManagement';
 import CompanySettings from './pages/settings/CompanySettings';
 import ChartOfAccounts from './pages/accounting/ChartOfAccounts';
 import TaxRates from './pages/accounting/TaxRates';
+import JournalEntries from './pages/accounting/JournalEntries';
 import ProductCategories from './pages/products/ProductCategories';
 import ProductItems from './pages/products/ProductItems';
 import Warehouses from './pages/products/Warehouses';
@@ -21,6 +24,10 @@ import Invoices from './pages/sales/Invoices';
 import CustomerPayments from './pages/sales/CustomerPayments';
 import CustomerRefunds from './pages/sales/CustomerRefunds';
 import CreditNotes from './pages/sales/CreditNotes';
+import StatementOfAccount from './pages/reports/StatementOfAccount';
+import ProfitAndLoss from './pages/reports/ProfitAndLoss';
+import GeneralLedger from './pages/reports/GeneralLedger';
+import ApprovalsQueue from './pages/settings/ApprovalsQueue';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -29,7 +36,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/accept-invitation" element={<AcceptInvitation />} />
 
         {/* Protected — requires auth token */}
         <Route element={<ProtectedRoute />}>
@@ -67,9 +76,15 @@ export default function App() {
             <Route path="/banking" element={<Placeholder title="Banking" />} />
             <Route path="/accounting" element={<ChartOfAccounts />} />
             <Route path="/accounting/tax-rates" element={<TaxRates />} />
+            <Route path="/accounting/journal-entries" element={<JournalEntries />} />
+            <Route path="/accounting/journal-entries/:id" element={<JournalEntries />} />
             <Route path="/reports" element={<Placeholder title="Reports" />} />
+            <Route path="/reports/statement-of-account" element={<StatementOfAccount />} />
+            <Route path="/reports/profit-and-loss" element={<ProfitAndLoss />} />
+            <Route path="/reports/general-ledger" element={<GeneralLedger />} />
             <Route path="/settings" element={<UserRoleManagement />} />
             <Route path="/settings/company-settings" element={<CompanySettings />} />
+            <Route path="/settings/approvals" element={<ApprovalsQueue />} />
           </Route>
         </Route>
 

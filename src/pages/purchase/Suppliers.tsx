@@ -136,6 +136,34 @@ function SuppliersModal({
 
   const showOpening = openingType !== 'none';
 
+  useEffect(() => {
+    if (mode !== 'edit' || !initial) return;
+    setCompanyName(initial.company_name ?? '');
+    setCompanyNameAr(initial.company_name_ar ?? '');
+    setPrimaryContact(initial.primary_contact_name ?? '');
+    setEmail(initial.email ?? '');
+    setPhone(initial.phone ?? '');
+    setVatTreatment(initial.vat_treatment ?? 'vat_registered_ksa');
+    setTrn(initial.tax_registration_number ?? '');
+    setCountry(initial.country ?? '');
+    setStreet(initial.street_address ?? '');
+    setStreetAr(initial.street_address_ar ?? '');
+    setBuilding(initial.building_number ?? '');
+    setLandId(initial.land_identifier ?? '');
+    setDistrict(initial.district ?? '');
+    setDistrictAr(initial.district_ar ?? '');
+    setCity(initial.city ?? '');
+    setCityAr(initial.city_ar ?? '');
+    setPostal(initial.postal_code ?? '');
+    setPaymentTerms(initial.payment_terms ?? '');
+    setOpeningType(initial.opening_balance_type ?? 'none');
+    setOpeningAmount(initial.opening_balance_amount ?? '');
+    setOpeningAsOf(initial.opening_balance_as_of ?? '');
+    setOpeningAccount(initial.opening_balance_account ?? '');
+    setIsActive(initial.is_active ?? true);
+    setError('');
+  }, [mode, initial]);
+
   // Keep opening-balance inputs consistent with selected type.
   useEffect(() => {
     if (openingType === 'none') {
@@ -459,7 +487,9 @@ export default function Suppliers() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -491,9 +521,8 @@ export default function Suppliers() {
   }, [search, activeFilter, vatFilter, countryFilter]);
 
   useEffect(() => {
-    fetchMeta();
-    fetchRows();
-  }, []);
+    void fetchMeta();
+  }, [fetchMeta]);
 
   // Support dedicated "Add Supplier" route without breaking the list page.
   // If user navigates to /purchase/suppliers/add, open the create UI.
@@ -503,8 +532,11 @@ export default function Suppliers() {
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, activeFilter, vatFilter, countryFilter]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, activeFilter, vatFilter, countryFilter, fetchRows]);
 
   async function openEdit(row: Supplier) {
     try {
@@ -538,6 +570,11 @@ export default function Suppliers() {
   const vatLabel = useMemo(() => {
     const m = new Map((choices?.vat_treatments ?? []).map((c) => [c.id, c.label]));
     return (id: string) => m.get(id) ?? id;
+  }, [choices]);
+
+  const paymentTermsLabel = useMemo(() => {
+    const m = new Map((choices?.payment_terms ?? []).map((c) => [c.id, c.label]));
+    return (id: string | null) => (id && m.get(id)) || id || '—';
   }, [choices]);
 
   const TH: React.CSSProperties = {
@@ -664,7 +701,7 @@ export default function Suppliers() {
                     <td style={{ ...TD, color: '#6b7280' }}>{r.primary_contact_name || '—'}</td>
                     <td style={{ ...TD, color: '#6b7280' }}>{vatLabel(r.vat_treatment)}</td>
                     <td style={{ ...TD, color: '#6b7280' }}>{r.tax_registration_number || '—'}</td>
-                    <td style={{ ...TD, color: '#6b7280' }}>{r.payment_terms || '—'}</td>
+                    <td style={{ ...TD, color: '#6b7280' }}>{paymentTermsLabel(r.payment_terms)}</td>
                     <td style={TD}><StatusBadge active={r.is_active} /></td>
                     <td style={{ ...TD, width: 80, borderRight: 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}>
@@ -692,6 +729,7 @@ export default function Suppliers() {
 
       {showCreate && (
         <SuppliersModal
+          key="supplier-modal-create"
           mode="create"
           choices={choices}
           countries={countries}
@@ -707,7 +745,7 @@ export default function Suppliers() {
         />
       )}
       {editRow && (
-        <SuppliersModal mode="edit" initial={editRow} choices={choices} countries={countries} accounts={accounts} onClose={() => setEditRow(null)} onSaved={onSaved} />
+        <SuppliersModal key={editRow.id} mode="edit" initial={editRow} choices={choices} countries={countries} accounts={accounts} onClose={() => setEditRow(null)} onSaved={onSaved} />
       )}
     </div>
   );

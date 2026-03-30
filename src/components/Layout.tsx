@@ -37,10 +37,15 @@ const ROUTES: Record<string, RouteConfig> = {
   '/customers/add': { title: 'Add Customer', parent: 'Sales' },
   '/banking':    { title: 'Banking' },
   '/accounting/tax-rates': { title: 'Tax Rates',        parent: 'Accounting' },
+  '/accounting/journal-entries': { title: 'Journal Entries', parent: 'Accounting' },
   '/accounting':           { title: 'Chart Of Accounts', parent: 'Accounting' },
   '/reports':    { title: 'Reports' },
+  '/reports/statement-of-account': { title: 'Statement of Accounts', parent: 'Reports' },
+  '/reports/profit-and-loss': { title: 'Profit and Loss', parent: 'Reports' },
+  '/reports/general-ledger': { title: 'General Ledger', parent: 'Reports' },
   '/settings':   { title: 'User & Role Management', parent: 'Settings'  },
   '/settings/company-settings': { title: 'Organization Settings', parent: 'Settings' },
+  '/settings/approvals': { title: 'Approvals', parent: 'Settings' },
 };
 
 export default function Layout() {

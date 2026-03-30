@@ -5,6 +5,8 @@ import { Plus, Search, SlidersHorizontal, Trash2, UploadCloud } from 'lucide-rea
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+interface Choice { id: string; label: string; }
+
 type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected';
 
 interface QuoteListRow {
@@ -146,11 +148,17 @@ function QuotesList() {
     }
   }, [search, status, customer, dateFrom, dateTo]);
 
-  useEffect(() => { fetchMeta(); fetchRows(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, status, customer, dateFrom, dateTo]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, status, customer, dateFrom, dateTo, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 10px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -356,7 +364,13 @@ function QuotesEditor() {
     }
   }, [id, isCreate]);
 
-  useEffect(() => { fetchMeta(); fetchQuote(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchQuote();
+  }, [fetchQuote]);
 
   function setLine(idx: number, patch: Partial<QuoteLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -381,7 +395,6 @@ function QuotesEditor() {
         customer,
         date,
         note,
-        status,
         lines: lines.map((l) => ({
           product: l.product || null,
           description: l.description,
@@ -628,8 +641,6 @@ function QuotesEditor() {
     </div>
   );
 }
-
-interface Choice { id: string; label: string; }
 
 export default function Quotes() {
   const { id } = useParams<{ id?: string }>();

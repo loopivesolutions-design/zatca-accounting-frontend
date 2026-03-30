@@ -1,12 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Search, Lock, ChevronRight, ChevronDown,
-  Plus, Download, Pencil, Trash2, X, Info, Folder, FolderOpen,
+  Plus, Download, Pencil, Trash2, X, Info, Folder, FolderOpen, Archive, ArchiveRestore,
 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+interface EditMetadata {
+  has_transactions?: boolean;
+  lock_reason?: string | null;
+  locked_fields?: string[];
+  editable_fields?: string[];
+  balance?: number;
+  balance_direction?: string;
+  account_type_locked_by_balance?: boolean;
+  zatca_mapping?: string | null;
+}
+
 interface Account {
   id: string;
   parent: string | null;
@@ -18,11 +29,16 @@ interface Account {
   cash_flow_type_display: string;
   account_type: string;
   account_type_display: string;
+  account_sub_type?: string;
+  zatca_mapping?: string;
+  zatca_mapping_display?: string;
   enable_payment: boolean;
   show_in_expense_claim: boolean;
   is_locked: boolean;
+  is_archived?: boolean;
   has_children: boolean;
   has_transactions?: boolean;
+  edit_metadata?: EditMetadata;
 }
 
 interface DisplayRow extends Account {
@@ -36,6 +52,7 @@ interface ParentChoice { id: string; code: string; name: string; }
 interface Choices {
   cash_flow_types: Choice[];
   account_types: Choice[];
+  zatca_mappings?: Choice[];
   parent_accounts: ParentChoice[];
 }
 
@@ -94,31 +111,80 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
   const [code,                setCode]                = useState(initial?.code ?? '');
   const [cashFlowType,        setCashFlowType]        = useState(initial?.cash_flow_type ?? '');
   const [accountType,         setAccountType]         = useState(initial?.account_type ?? '');
+  const [accountSubType,      setAccountSubType]      = useState(initial?.account_sub_type ?? '');
   const [enablePayment,       setEnablePayment]       = useState(initial?.enable_payment ?? false);
   const [showInExpenseClaim,  setShowInExpenseClaim]  = useState(initial?.show_in_expense_claim ?? false);
+  const [isArchived,          setIsArchived]          = useState(!!initial?.is_archived);
+  const [meta,                setMeta]                = useState<EditMetadata | null>(initial?.edit_metadata ?? null);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // Lock state based on backend rules
-  const isSystemLocked    = mode === 'edit' && !!initial?.is_locked;
-  const hasTransactions   = mode === 'edit' && !!initial?.has_transactions;
-  // code, parent, cash_flow_type are locked when account is a system account OR has transactions
-  const structuralLocked  = isSystemLocked || hasTransactions;
+  useEffect(() => {
+    if (mode !== 'edit' || !initial?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [accRes, emRes] = await Promise.all([
+          api.get<Account>(`/api/v1/accounting/chart-of-accounts/${initial.id}/`),
+          api.get<EditMetadata>(`/api/v1/accounting/chart-of-accounts/${initial.id}/edit-metadata/`),
+        ]);
+        if (cancelled) return;
+        const a = accRes.data;
+        setMeta(emRes.data);
+        setParent(a.parent ?? '');
+        setName(a.name);
+        setNameAr(a.name_ar);
+        setCode(a.code);
+        setCashFlowType(a.cash_flow_type ?? '');
+        setAccountType(a.account_type);
+        setAccountSubType(a.account_sub_type ?? '');
+        setEnablePayment(a.enable_payment);
+        setShowInExpenseClaim(a.show_in_expense_claim);
+        setIsArchived(!!a.is_archived);
+      } catch {
+        /* keep initial */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, initial?.id]);
+
+  const isSystemLocked = mode === 'edit' && !!initial?.is_locked;
+  const hasTransactions = mode === 'edit' && !!initial?.has_transactions;
+  const legacyStructural = isSystemLocked || hasTransactions;
+
+  const locked = useMemo(() => {
+    return (field: string) => {
+      if (mode === 'create') return false;
+      if (meta?.locked_fields?.length) return meta.locked_fields.includes(field);
+      return ['parent', 'code', 'cash_flow_type', 'account_type'].includes(field) ? legacyStructural : false;
+    };
+  }, [mode, meta, legacyStructural]);
+
+  const structuralLocked = locked('code');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setLoading(true);
 
-    // Only send unlocked fields to PATCH; always include name/name_ar/toggles
-    const body = mode === 'create'
-      ? { parent: parent || null, name, name_ar: nameAr, code, cash_flow_type: cashFlowType,
-          account_type: accountType, enable_payment: enablePayment, show_in_expense_claim: showInExpenseClaim }
+    const body: Record<string, unknown> = mode === 'create'
+      ? {
+          parent: parent || null, name, name_ar: nameAr, code, cash_flow_type: cashFlowType || null,
+          account_type: accountType, account_sub_type: accountSubType || undefined,
+          enable_payment: enablePayment, show_in_expense_claim: showInExpenseClaim,
+        }
       : {
           name, name_ar: nameAr,
           enable_payment: enablePayment, show_in_expense_claim: showInExpenseClaim,
-          // structural fields only when not locked
-          ...(!structuralLocked && { parent: parent || null, code, cash_flow_type: cashFlowType }),
         };
+
+    if (mode === 'edit') {
+      if (!locked('parent')) body.parent = parent || null;
+      if (!locked('code')) body.code = code;
+      if (!locked('cash_flow_type')) body.cash_flow_type = cashFlowType || null;
+      if (!locked('account_type')) body.account_type = accountType;
+      if (!locked('account_sub_type')) body.account_sub_type = accountSubType || null;
+      if (meta?.editable_fields?.includes('is_archived')) body.is_archived = isArchived;
+    }
 
     try {
       const { data } = mode === 'create'
@@ -152,15 +218,18 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
         </div>
 
         {/* Lock notice for edit mode */}
-        {mode === 'edit' && structuralLocked && (
+        {mode === 'edit' && (structuralLocked || meta?.lock_reason) && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, backgroundColor: '#f8faff',
             border: '1px solid #e0e7ff', borderRadius: 7, padding: '10px 12px', marginBottom: 4 }}>
             <Lock size={13} style={{ color: '#818cf8', marginTop: 1, flexShrink: 0 }} />
             <span style={{ fontSize: 12.5, color: '#4f46e5', lineHeight: 1.5 }}>
-              {isSystemLocked
-                ? <><strong>System account</strong> — Code, Parent and Cash Flow Type are permanently locked. Only Name and display settings can be changed.</>
-                : <><strong>Has transactions</strong> — Code, Parent and Cash Flow Type are locked to protect historical records. Name and display settings remain editable.</>
-              }
+              {meta?.lock_reason === 'ZATCA_MAPPED'
+                ? <><strong>ZATCA-mapped account</strong> — Structural fields are locked to protect VAT reports.</>
+                : meta?.lock_reason === 'HAS_TRANSACTIONS' || hasTransactions
+                  ? <><strong>Has transactions</strong> — Some fields are locked to protect historical records.</>
+                  : isSystemLocked
+                    ? <><strong>System account</strong> — Only permitted fields can be changed.</>
+                    : <><strong>Restricted</strong> — Some fields are locked by policy.</>}
             </span>
           </div>
         )}
@@ -171,7 +240,7 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
           {/* Parent Account */}
-          {!structuralLocked && (
+          {!locked('parent') && (
             <div>
               <label style={labelSt}>Parent Account<span style={{ color: '#35C0A3' }}>*</span></label>
               <select value={parent} onChange={(e) => setParent(e.target.value)}
@@ -205,26 +274,26 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
           {/* Code */}
           <div>
             <label style={{ ...labelSt, display: 'flex', alignItems: 'center', gap: 4 }}>
-              Code{!structuralLocked && <span style={{ color: '#35C0A3' }}>*</span>}
-              {structuralLocked
+              Code{!locked('code') && <span style={{ color: '#35C0A3' }}>*</span>}
+              {locked('code')
                 ? <Lock size={11} style={{ color: '#ccc' }} />
                 : <span title="Unique numeric code for this account" style={{ display: 'inline-flex' }}><Info size={13} style={{ color: '#bbb', cursor: 'help' }} /></span>
               }
             </label>
             <input value={code} onChange={(e) => setCode(e.target.value)}
-              required={!structuralLocked} disabled={structuralLocked} placeholder="e.g. 111"
-              style={{ ...inputSt, ...(structuralLocked ? { backgroundColor: '#f5f5f5', color: '#aaa', cursor: 'not-allowed' } : {}) }}
-              onFocus={(e) => !structuralLocked && (e.target.style.borderColor = '#35C0A3')}
+              required={!locked('code')} disabled={locked('code')} placeholder="e.g. 111"
+              style={{ ...inputSt, ...(locked('code') ? { backgroundColor: '#f5f5f5', color: '#aaa', cursor: 'not-allowed' } : {}) }}
+              onFocus={(e) => !locked('code') && (e.target.style.borderColor = '#35C0A3')}
               onBlur={(e) => (e.target.style.borderColor = '#e0e0e0')} />
           </div>
 
           {/* Cash Flow Type */}
           <div>
             <label style={{ ...labelSt, display: 'flex', alignItems: 'center', gap: 4 }}>
-              Cash flow type{!structuralLocked && <span style={{ color: '#35C0A3' }}>*</span>}
-              {structuralLocked && <Lock size={11} style={{ color: '#ccc' }} />}
+              Cash flow type{!locked('cash_flow_type') && <span style={{ color: '#35C0A3' }}>*</span>}
+              {locked('cash_flow_type') && <Lock size={11} style={{ color: '#ccc' }} />}
             </label>
-            {structuralLocked ? (
+            {locked('cash_flow_type') ? (
               <input value={cashFlowType || '—'} disabled
                 style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#aaa', cursor: 'not-allowed' }} />
             ) : (
@@ -244,11 +313,16 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
             )}
           </div>
 
-          {/* Account Type — create only */}
-          {mode === 'create' && (
+          {/* Account Type — create, or edit when metadata allows */}
+          {!locked('account_type') && (
             <div>
-              <label style={labelSt}>Account Type</label>
-              <select value={accountType} onChange={(e) => setAccountType(e.target.value)}
+              <label style={labelSt}>
+                Account Type{mode === 'create' && <span style={{ color: '#35C0A3' }}>*</span>}
+              </label>
+              <select
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value)}
+                required={mode === 'create'}
                 style={{ ...inputSt, cursor: 'pointer' }}
                 onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
                 onBlur={(e) => (e.target.style.borderColor = '#e0e0e0')}
@@ -257,6 +331,26 @@ function AccountModal({ mode, initial, choices, onClose, onSaved }: AccountFormP
                 {(choices?.account_types ?? []).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
             </div>
+          )}
+
+          {/* Account sub-type */}
+          {(mode === 'create' || (mode === 'edit' && !locked('account_sub_type'))) && (
+            <div>
+              <label style={labelSt}>Account sub-type</label>
+              <input value={accountSubType} onChange={(e) => setAccountSubType(e.target.value)}
+                placeholder="e.g. Cash and Cash Equivalents"
+                style={inputSt}
+                onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
+                onBlur={(e) => (e.target.style.borderColor = '#e0e0e0')} />
+            </div>
+          )}
+
+          {mode === 'edit' && meta?.editable_fields?.includes('is_archived') && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#555', cursor: 'pointer' }}>
+              <input type="checkbox" checked={isArchived} onChange={(e) => setIsArchived(e.target.checked)}
+                style={{ accentColor: '#35C0A3', width: 14, height: 14, cursor: 'pointer' }} />
+              Archived (excluded from new transactions)
+            </label>
           )}
 
           {/* Toggles */}
@@ -301,17 +395,21 @@ export default function ChartOfAccounts() {
   const [showCreate,   setShowCreate]   = useState(false);
   const [editAccount,  setEditAccount]  = useState<Account | null>(null);
   const [exporting,    setExporting]    = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [activeCell,   setActiveCell]   = useState<{ rowId: string; col: string } | null>(null);
   const [cellDraft,    setCellDraft]    = useState('');
   const [cellSaving,   setCellSaving]   = useState<Set<string>>(new Set());
   const searchTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef  = useRef<HTMLDivElement>(null);
 
-  // Editable columns in navigation order.
-  // Locked accounts: only name. Unlocked: all four.
-  const EDIT_COLS = ['name', 'cash_flow_type', 'enable_payment', 'show_in_expense_claim'];
+  const EDIT_COLS = ['name', 'name_ar', 'cash_flow_type', 'enable_payment', 'show_in_expense_claim', 'is_archived'];
   function editableCols(acc: Account): string[] {
-    return acc.is_locked ? ['name'] : EDIT_COLS;
+    const m = acc.edit_metadata;
+    if (m?.editable_fields?.length) {
+      return EDIT_COLS.filter((c) => m.editable_fields!.includes(c));
+    }
+    if (acc.is_locked) return ['name', 'name_ar'];
+    return ['name', 'name_ar', 'cash_flow_type', 'enable_payment', 'show_in_expense_claim'];
   }
 
   function allRows(): Account[] {
@@ -356,7 +454,7 @@ export default function ChartOfAccounts() {
   function deactivateAndSave() {
     if (!activeCell) return;
     const { rowId, col } = activeCell;
-    if (col !== 'enable_payment' && col !== 'show_in_expense_claim') {
+    if (col !== 'enable_payment' && col !== 'show_in_expense_claim' && col !== 'is_archived') {
       const account = allRows().find((r) => r.id === rowId);
       if (account && cellDraft !== (account as unknown as Record<string, unknown>)[col]) {
         commitCell(rowId, col, cellDraft);
@@ -412,8 +510,7 @@ export default function ChartOfAccounts() {
 
   function handleTableKeyDown(e: React.KeyboardEvent) {
     if (!activeCell) return;
-    const isText = activeCell.col === 'name';
-
+    const isText = activeCell.col === 'name' || activeCell.col === 'name_ar';
     if (e.key === 'Escape') { e.preventDefault(); setActiveCell(null); setCellDraft(''); }
     else if (e.key === 'Enter')       { e.preventDefault(); navigateCell('down'); }
     else if (e.key === 'Tab')         { e.preventDefault(); navigateCell(e.shiftKey ? 'shift-tab' : 'tab'); }
@@ -427,11 +524,13 @@ export default function ChartOfAccounts() {
   const loadRoots = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get<Account[]>('/api/v1/accounting/chart-of-accounts/tree/?root_only=true');
+      const q = new URLSearchParams({ root_only: 'true' });
+      if (includeArchived) q.set('include_archived', 'true');
+      const { data } = await api.get<Account[]>(`/api/v1/accounting/chart-of-accounts/tree/?${q}`);
       setDisplayRows(data.map((a) => toDisplayRow(a, 0)));
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, []);
+  }, [includeArchived]);
 
   // ── Load choices for form ───────────────────────────────────────────────────
   const loadChoices = useCallback(async () => {
@@ -441,7 +540,22 @@ export default function ChartOfAccounts() {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => { loadRoots(); loadChoices(); }, []);
+  useEffect(() => { loadChoices(); }, []);
+  useEffect(() => { void loadRoots(); }, [loadRoots]);
+
+  const refreshData = useCallback(async () => {
+    await loadRoots();
+    if (search.trim()) {
+      const q = new URLSearchParams({ search: search.trim(), page_size: '50' });
+      if (includeArchived) q.set('include_archived', 'true');
+      try {
+        const { data } = await api.get<{ results: Account[] }>(`/api/v1/accounting/chart-of-accounts/?${q}`);
+        setSearchRows(data.results ?? []);
+      } catch {
+        /* silent */
+      }
+    }
+  }, [loadRoots, search, includeArchived]);
 
   // ── Search (debounced) ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -450,14 +564,19 @@ export default function ChartOfAccounts() {
     setSearching(true);
     searchTimer.current = setTimeout(async () => {
       try {
+        const q = new URLSearchParams({
+          search: search.trim(),
+          page_size: '50',
+        });
+        if (includeArchived) q.set('include_archived', 'true');
         const { data } = await api.get<{ results: Account[] }>(
-          `/api/v1/accounting/chart-of-accounts/?search=${encodeURIComponent(search)}&page_size=50`
+          `/api/v1/accounting/chart-of-accounts/?${q}`
         );
         setSearchRows(data.results ?? []);
       } catch { setSearchRows([]); }
       finally { setSearching(false); }
     }, 350);
-  }, [search]);
+  }, [search, includeArchived]);
 
   const isSearching = search.trim().length > 0;
 
@@ -479,7 +598,8 @@ export default function ChartOfAccounts() {
     setDisplayRows((prev) => prev.map((r) => r.id === rowId ? { ...r, loadingChildren: true } : r));
 
     try {
-      const { data } = await api.get<Account[]>(`/api/v1/accounting/chart-of-accounts/${rowId}/children/`);
+      const childQ = includeArchived ? '?include_archived=true' : '';
+      const { data } = await api.get<Account[]>(`/api/v1/accounting/chart-of-accounts/${rowId}/children/${childQ}`);
       const children = data.map((a) => toDisplayRow(a, row.level + 1));
       setDisplayRows((prev) =>
         insertAfter(
@@ -513,7 +633,11 @@ export default function ChartOfAccounts() {
   async function handleExport() {
     setExporting(true);
     try {
-      const { data, headers } = await api.get('/api/v1/accounting/chart-of-accounts/export/', { responseType: 'blob' });
+      const exportQs = includeArchived ? '?include_archived=true' : '';
+      const { data, headers } = await api.get(
+        `/api/v1/accounting/chart-of-accounts/export/${exportQs}`,
+        { responseType: 'blob' },
+      );
       const contentDisposition = headers['content-disposition'] ?? '';
       const fileName = contentDisposition.match(/filename="?(.+)"?/)?.[1] ?? 'chart_of_accounts.csv';
       const url = URL.createObjectURL(new Blob([data]));
@@ -625,6 +749,46 @@ export default function ChartOfAccounts() {
       );
     }
 
+    function nameArCell() {
+      const isActive = isRowActive && activeCell?.col === 'name_ar';
+      const canEdit = editableCols(account).includes('name_ar');
+      return (
+        <td
+          style={cellStyle(account, 'name_ar', { padding: '0' })}
+          onClick={() => canEdit && !isActive && activateCell(account.id, 'name_ar')}
+        >
+          {isActive ? (
+            <input
+              autoFocus
+              dir="rtl"
+              value={cellDraft}
+              onChange={(e) => setCellDraft(e.target.value)}
+              onBlur={() => deactivateAndSave()}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                backgroundColor: 'transparent',
+                fontSize: 13.5,
+                fontFamily: "'Heebo', sans-serif",
+                color: '#555',
+                padding: '9px 10px',
+                boxSizing: 'border-box',
+              }}
+            />
+          ) : (
+            <span
+              dir="rtl"
+              style={{ display: 'block', fontSize: 13.5, color: account.name_ar ? '#555' : '#ddd', padding: '9px 10px' }}
+            >
+              {account.name_ar || '–'}
+            </span>
+          )}
+        </td>
+      );
+    }
+
     function cashFlowCell() {
       const isActive = isRowActive && activeCell?.col === 'cash_flow_type';
       const canEdit  = editableCols(account).includes('cash_flow_type');
@@ -663,8 +827,8 @@ export default function ChartOfAccounts() {
       );
     }
 
-    function boolCell(col: 'enable_payment' | 'show_in_expense_claim') {
-      const val = account[col];
+    function boolCell(col: 'enable_payment' | 'show_in_expense_claim' | 'is_archived') {
+      const val = account[col] as boolean;
       const canEdit = editableCols(account).includes(col);
       return (
         <td
@@ -717,6 +881,9 @@ export default function ChartOfAccounts() {
         {/* Account Name — inline text */}
         {nameCell()}
 
+        {/* Arabic name — inline */}
+        {nameArCell()}
+
         {/* Cash flow type — inline select */}
         {cashFlowCell()}
 
@@ -725,6 +892,9 @@ export default function ChartOfAccounts() {
 
         {/* Show in expense claim — toggle */}
         {boolCell('show_in_expense_claim')}
+
+        {/* Archived */}
+        {boolCell('is_archived')}
 
         {/* Account type — read-only badge */}
         <td style={{ padding: '9px 14px', fontSize: 12.5, textAlign: 'center', borderRight: '1px solid rgba(0,0,0,0.06)' }}>
@@ -747,6 +917,28 @@ export default function ChartOfAccounts() {
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#35C0A3',
                 padding: 2, display: 'flex', alignItems: 'center' }}>
               <Pencil size={13} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                    void (async () => {
+                  try {
+                    if (account.is_archived) {
+                      await api.post(`/api/v1/accounting/chart-of-accounts/${account.id}/unarchive/`);
+                    } else {
+                      await api.post(`/api/v1/accounting/chart-of-accounts/${account.id}/archive/`);
+                    }
+                    await refreshData();
+                  } catch (err) {
+                    alert(parseApiError(err));
+                  }
+                })();
+              }}
+              title={account.is_archived ? 'Unarchive' : 'Archive'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b',
+                padding: 2, display: 'flex', alignItems: 'center' }}
+            >
+              {account.is_archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
             </button>
             <button onClick={(e) => { e.stopPropagation(); deleteAccount(account.id); }}
               title="Delete"
@@ -796,7 +988,11 @@ export default function ChartOfAccounts() {
           />
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#555', cursor: 'pointer', userSelect: 'none' }}>
+            <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} style={{ accentColor: '#35C0A3' }} />
+            Include archived
+          </label>
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -821,26 +1017,28 @@ export default function ChartOfAccounts() {
               <th style={{ ...COL_HEADER, width: 32 }} />
               <th style={{ ...COL_HEADER, textAlign: 'left', width: 80 }}>Code</th>
               <th style={{ ...COL_HEADER, textAlign: 'left' }}>Account Name</th>
+              <th style={{ ...COL_HEADER, textAlign: 'left' }}>Name (AR)</th>
               <th style={COL_HEADER}>Cash flow type</th>
               <th style={COL_HEADER}>Enable payment</th>
               <th style={COL_HEADER}>Show in expense claim</th>
+              <th style={COL_HEADER}>Archived</th>
               <th style={COL_HEADER}>Account type</th>
-              <th style={{ ...COL_HEADER, width: 70 }} />
+              <th style={{ ...COL_HEADER, width: 96 }} />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>Loading accounts…</td></tr>
+              <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>Loading accounts…</td></tr>
             ) : isSearching ? (
               searching ? (
-                <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>Searching…</td></tr>
+                <tr><td colSpan={10} style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>Searching…</td></tr>
               ) : searchRows.length === 0 ? (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#bbb', fontSize: 13 }}>No results for "{search}"</td></tr>
+                <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#bbb', fontSize: 13 }}>No results for "{search}"</td></tr>
               ) : (
                 searchRows.map((a) => renderRow(a, 0))
               )
             ) : displayRows.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#bbb', fontSize: 13 }}>No accounts found.</td></tr>
+              <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#bbb', fontSize: 13 }}>No accounts found.</td></tr>
             ) : (
               displayRows.map((dr) => renderRow(dr, dr.level, true, dr))
             )}

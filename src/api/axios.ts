@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BACKEND_URL = 'https://zatca-backend.loopive.com';
+export const BACKEND_URL = 'https://zatca-backend.loopive.com';
 
 const api = axios.create({
   baseURL: BACKEND_URL,

@@ -5,6 +5,10 @@ import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function customerPaymentIdempotencyKey() {
+  return crypto.randomUUID();
+}
+
 type PaymentType = 'invoice_payment' | 'advance_payment';
 
 interface CustomerPayment {
@@ -21,6 +25,7 @@ interface CustomerPayment {
   payment_date: string;
   description: string;
   is_posted: boolean;
+  journal_entry?: string | null;
   amount_applied: string;
   remaining_amount: string;
   allocations: { invoice: string; amount: string }[];
@@ -98,11 +103,17 @@ function PaymentsList() {
     }
   }, [search, customer, paymentType]);
 
-  useEffect(() => { fetchMeta(); fetchRows(); }, []);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, customer, paymentType]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, customer, paymentType, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 12px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -232,6 +243,10 @@ function PaymentEditor() {
   const [accounts, setAccounts] = useState<AccountChoice[]>([]);
   const [outstanding, setOutstanding] = useState<OutstandingInvoice[]>([]);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  const [paymentTypeOptions, setPaymentTypeOptions] = useState<{ id: PaymentType; label: string }[]>([
+    { id: 'invoice_payment', label: 'Invoice Payments' },
+    { id: 'advance_payment', label: 'Advance Payments' },
+  ]);
 
   const amountApplied = useMemo(
     () => Object.values(allocations).reduce((acc, v) => acc + (Number(v) || 0), 0),
@@ -249,7 +264,9 @@ function PaymentEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -260,14 +277,23 @@ function PaymentEditor() {
     }
   }, []);
 
-  const fetchOutstanding = useCallback(async (customerId: string) => {
-    if (!customerId || paymentType !== 'invoice_payment') {
+  const fetchOutstanding = useCallback(async (customerId: string, paymentTypeOverride?: PaymentType) => {
+    const pt = paymentTypeOverride ?? paymentType;
+    if (!customerId || pt !== 'invoice_payment') {
       setOutstanding([]);
       return;
     }
     try {
-      const { data } = await api.get<{ results: OutstandingInvoice[] }>(`/api/v1/sales/customer-payments/outstanding-invoices/?customer=${customerId}`);
+      const { data } = await api.get<{
+        results: OutstandingInvoice[];
+        payment_types?: { id: string; label: string }[];
+      }>(`/api/v1/sales/customer-payments/outstanding-invoices/?customer=${encodeURIComponent(customerId)}`);
       setOutstanding(data.results ?? []);
+      if (data.payment_types?.length) {
+        setPaymentTypeOptions(
+          data.payment_types.map((p) => ({ id: p.id as PaymentType, label: p.label })),
+        );
+      }
     } catch {
       setOutstanding([]);
     }
@@ -290,7 +316,7 @@ function PaymentEditor() {
       const allocMap: Record<string, string> = {};
       (data.allocations ?? []).forEach((a) => { allocMap[a.invoice] = a.amount; });
       setAllocations(allocMap);
-      await fetchOutstanding(data.customer ?? '');
+      await fetchOutstanding(data.customer ?? '', data.payment_type ?? 'invoice_payment');
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -298,8 +324,17 @@ function PaymentEditor() {
     }
   }, [id, isCreate, fetchOutstanding]);
 
-  useEffect(() => { fetchMeta(); fetchPayment(); }, []);
-  useEffect(() => { if (customer) fetchOutstanding(customer); }, [customer, paymentType]);
+  useEffect(() => {
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchPayment();
+  }, [fetchPayment]);
+
+  useEffect(() => {
+    if (customer) void fetchOutstanding(customer);
+  }, [customer, paymentType, fetchOutstanding]);
 
   function setAlloc(invoiceId: string, val: string) {
     setAllocations((prev) => ({ ...prev, [invoiceId]: val }));
@@ -345,7 +380,9 @@ function PaymentEditor() {
 
       const { data } = paymentId
         ? await api.patch<CustomerPayment>(`/api/v1/sales/customer-payments/${paymentId}/`, body)
-        : await api.post<CustomerPayment>('/api/v1/sales/customer-payments/', body);
+        : await api.post<CustomerPayment>('/api/v1/sales/customer-payments/', body, {
+            headers: { 'Idempotency-Key': customerPaymentIdempotencyKey() },
+          });
 
       if (!id || id === 'add') nav(`/sales/customer-payments/${data.id}`, { replace: true });
       setPaymentId(data.id);
@@ -437,16 +474,19 @@ function PaymentEditor() {
               Payment Details
             </div>
             <div style={{ padding: 12, display: 'grid', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12.5, color: '#555' }}>Payment Type*</span>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                  <input type="radio" checked={paymentType === 'invoice_payment'} onChange={() => setPaymentType('invoice_payment')} style={{ accentColor: '#35C0A3' }} />
-                  Invoice Payments
-                </label>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
-                  <input type="radio" checked={paymentType === 'advance_payment'} onChange={() => setPaymentType('advance_payment')} style={{ accentColor: '#35C0A3' }} />
-                  Advance Payments
-                </label>
+                {paymentTypeOptions.map((opt) => (
+                  <label key={opt.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                    <input
+                      type="radio"
+                      checked={paymentType === opt.id}
+                      onChange={() => setPaymentType(opt.id)}
+                      style={{ accentColor: '#35C0A3' }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
               </div>
 
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -484,7 +524,7 @@ function PaymentEditor() {
                 <span style={{ fontSize: 13, color: '#666' }}>Amount to apply</span>
                 <span style={{ fontSize: 13.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(amountApplied)}</span>
 
-                <span style={{ fontSize: 13, color: '#666' }}>Amount paid</span>
+                <span style={{ fontSize: 13, color: '#666' }}>Amount received</span>
                 <span style={{ fontSize: 13.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(amountReceived || 0)}</span>
 
                 <span style={{ fontSize: 13, color: '#666' }}>Remaining</span>

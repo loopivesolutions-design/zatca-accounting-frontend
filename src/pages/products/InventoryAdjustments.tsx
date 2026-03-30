@@ -16,7 +16,10 @@ import { parseApiError } from '../../api/errors';
 type AdjustmentStatus = 'draft' | 'posted';
 
 interface AdjustmentLineRow {
-  id: string; // line id
+  id: string; // line id (list is one row per line)
+  /** Parent adjustment header UUID — use for detail URL when present (never use human `adjustment_id`). */
+  adjustment?: string | null;
+  adjustment_header_id?: string | null;
   adjustment_id: string | null;
   reference: string;
   status: AdjustmentStatus;
@@ -126,6 +129,11 @@ function fmtQty(v: string) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+/** Detail screen is keyed by adjustment header UUID, not JE-style `adjustment_id` (e.g. ADJ-000001). */
+function adjustmentDetailId(row: AdjustmentLineRow): string {
+  return row.adjustment_header_id || row.adjustment || row.id;
+}
+
 // ── List Page ────────────────────────────────────────────────────────────────
 function InventoryAdjustmentsList() {
   const nav = useNavigate();
@@ -185,14 +193,16 @@ function InventoryAdjustmentsList() {
   }, [search, status, warehouse, item, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchChoices();
-    fetchRows();
-  }, []);
+    void fetchChoices();
+  }, [fetchChoices]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, status, warehouse, item, dateFrom, dateTo]);
+    searchTimer.current = setTimeout(() => void fetchRows(), 320);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, status, warehouse, item, dateFrom, dateTo, fetchRows]);
 
   const TH: React.CSSProperties = {
     padding: '10px 12px',
@@ -311,7 +321,7 @@ function InventoryAdjustmentsList() {
                 <tr
                   key={r.id}
                   style={{ backgroundColor: '#fff', cursor: 'pointer' }}
-                  onClick={() => nav(`/products/inventory/adjustments/${r.adjustment_id ? r.adjustment_id : r.id}`)}
+                  onClick={() => nav(`/products/inventory/adjustments/${adjustmentDetailId(r)}`)}
                 >
                   <td style={TD}><StatusPill status={r.status} /></td>
                   <td style={{ ...TD, color: '#374151', fontWeight: 600 }}>{r.reference || '—'}</td>
@@ -399,7 +409,9 @@ function InventoryAdjustmentEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -449,9 +461,24 @@ function InventoryAdjustmentEditor() {
   }, [id, isNew]);
 
   useEffect(() => {
-    fetchChoices();
-    fetchDraft();
-  }, []);
+    void fetchChoices();
+  }, [fetchChoices]);
+
+  useEffect(() => {
+    if (isNew) {
+      setLoading(false);
+      setDraftId(null);
+      setStatus('draft');
+      setAdjustmentId(null);
+      setReference('');
+      setDate(new Date().toISOString().slice(0, 10));
+      setWarehouse('');
+      setLines([{ product: '', description: '', quantity_delta: '', inventory_value_delta: '', account: '' }]);
+      setError('');
+      return;
+    }
+    if (id) void fetchDraft();
+  }, [id, isNew, fetchDraft]);
 
   function setLine(idx: number, patch: Partial<AdjustmentDraftLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -483,8 +510,8 @@ function InventoryAdjustmentEditor() {
         lines: lines.map((l) => ({
           product: l.product,
           description: l.description,
-          quantity_delta: l.quantity_delta,
-          inventory_value_delta: l.inventory_value_delta,
+          quantity_delta: Number(l.quantity_delta) || 0,
+          inventory_value_delta: Number(l.inventory_value_delta) || 0,
           account: l.account,
         })),
       };

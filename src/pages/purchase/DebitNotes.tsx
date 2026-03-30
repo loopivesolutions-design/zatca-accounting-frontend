@@ -25,6 +25,8 @@ interface DebitNoteListRow {
 
 interface DebitNoteLine {
   id?: string;
+  /** Raw API field when loading from server */
+  description?: string;
   description_text: string;
   selected_products: { id: string; name: string; code?: string }[];
   account: string;
@@ -35,6 +37,16 @@ interface DebitNoteLine {
   line_subtotal?: string;
   line_tax_amount?: string;
   line_total?: string;
+}
+
+interface DebitNoteApiLine {
+  id?: string;
+  description?: string;
+  account?: string | { id: string };
+  quantity?: string | number;
+  unit_price?: string | number;
+  tax_rate?: string | null;
+  discount_percent?: string | number;
 }
 
 interface DebitNoteDetail {
@@ -51,7 +63,7 @@ interface DebitNoteDetail {
   subtotal: string;
   total_vat: string;
   total_amount: string;
-  lines: DebitNoteLine[];
+  lines: DebitNoteApiLine[];
   created_at: string;
   updated_at: string;
 }
@@ -190,14 +202,16 @@ function DebitNotesList() {
   }, [search, status, supplier, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchSuppliers();
-    fetchRows();
-  }, []);
+    void fetchSuppliers();
+  }, [fetchSuppliers]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchRows(), 320);
-  }, [search, status, supplier, dateFrom, dateTo]);
+    searchTimer.current = setTimeout(() => void fetchRows(), search ? 320 : 0);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [search, status, supplier, dateFrom, dateTo, fetchRows]);
 
   const TH: CSSProperties = {
     padding: '10px 10px', fontSize: 12, fontWeight: 500, color: '#888',
@@ -367,7 +381,9 @@ function DebitNotesEditor() {
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
-          flat.push({ id: n.id, code: n.code, name: n.name });
+          if (!n.is_archived) {
+            flat.push({ id: n.id, code: n.code, name: n.name });
+          }
           if (n.children && Array.isArray(n.children)) walk(n.children);
         });
       }
@@ -392,15 +408,20 @@ function DebitNotesEditor() {
       setSupplier(data.supplier ?? '');
       setDate(data.date ?? '');
       setNote(data.note ?? '');
-      setLines((data.lines ?? []).map((l) => ({
-        id: l.id,
-        ...parseLineDescription((l as unknown as { description?: string }).description),
-        account: l.account ?? '',
-        quantity: String(l.quantity ?? ''),
-        unit_price: String(l.unit_price ?? ''),
-        tax_rate: l.tax_rate ?? '',
-        discount_percent: String(l.discount_percent ?? '0'),
-      })));
+      setLines((data.lines ?? []).map((l) => {
+        const acct = l.account;
+        const accountId = typeof acct === 'string' ? acct : acct?.id ?? '';
+        return {
+          id: l.id,
+          description: l.description,
+          ...parseLineDescription(l.description),
+          account: accountId,
+          quantity: String(l.quantity ?? ''),
+          unit_price: String(l.unit_price ?? ''),
+          tax_rate: l.tax_rate ?? '',
+          discount_percent: String(l.discount_percent ?? '0'),
+        };
+      }));
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -409,9 +430,12 @@ function DebitNotesEditor() {
   }, [id, isCreate]);
 
   useEffect(() => {
-    fetchMeta();
-    fetchDebitNote();
-  }, []);
+    void fetchMeta();
+  }, [fetchMeta]);
+
+  useEffect(() => {
+    void fetchDebitNote();
+  }, [fetchDebitNote]);
 
   function setLine(idx: number, patch: Partial<DebitNoteLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));

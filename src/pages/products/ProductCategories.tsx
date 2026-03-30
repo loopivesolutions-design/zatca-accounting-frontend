@@ -54,12 +54,20 @@ function CategoryModal({ mode, initial, onClose, onSaved }: CategoryModalProps) 
   const [error,       setError]       = useState('');
 
   useEffect(() => {
+    setName(initial?.name ?? '');
+    setNameAr(initial?.name_ar ?? '');
+    setDescription(initial?.description ?? '');
+    setParent(initial?.parent ?? '');
+    setIsActive(initial?.is_active ?? true);
+  }, [mode, initial?.id]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
     if (mode === 'edit' && initial?.id) params.set('exclude', initial.id);
     api.get<CategoryChoice[]>(`/api/v1/products/categories/choices/?${params}`)
       .then(({ data }) => setChoices(data))
       .catch(() => {/* silent */});
-  }, []);
+  }, [mode, initial?.id]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -895,10 +903,10 @@ export default function ProductCategories() {
 
       {/* Modals */}
       {showCreate && (
-        <CategoryModal mode="create" onClose={() => setShowCreate(false)} onSaved={onSaved} />
+        <CategoryModal key="create" mode="create" onClose={() => setShowCreate(false)} onSaved={onSaved} />
       )}
       {editCat && (
-        <CategoryModal mode="edit" initial={editCat} onClose={() => setEditCat(null)} onSaved={onSaved} />
+        <CategoryModal key={editCat.id} mode="edit" initial={editCat} onClose={() => setEditCat(null)} onSaved={onSaved} />
       )}
 
       {/* Bulk delete confirmation */}

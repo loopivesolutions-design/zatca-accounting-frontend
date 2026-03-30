@@ -2,6 +2,35 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import api from '../api/axios';
+import { parseApiError } from '../api/errors';
+
+function persistSession(data: Record<string, unknown>, fallbackEmail: string) {
+  const accessToken =
+    (data.access as string | undefined) ??
+    (data.access_token as string | undefined) ??
+    (data.token as string | undefined) ??
+    ((data.data as Record<string, unknown> | undefined)?.access as string | undefined);
+  const refreshToken =
+    (data.refresh as string | undefined) ??
+    (data.refresh_token as string | undefined) ??
+    ((data.data as Record<string, unknown> | undefined)?.refresh as string | undefined);
+
+  if (accessToken) localStorage.setItem('auth_token', accessToken);
+  if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+
+  if (data.user && typeof data.user === 'object') {
+    localStorage.setItem('auth_user', JSON.stringify(data.user));
+  } else if (data.user_id != null || data.role != null) {
+    localStorage.setItem(
+      'auth_user',
+      JSON.stringify({
+        id: data.user_id,
+        role: data.role,
+        email: (data.email as string | undefined) ?? fallbackEmail,
+      })
+    );
+  }
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,26 +47,25 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { data } = await api.post('/api/v1/user/admin/login/', { email, password });
+      let data: Record<string, unknown>;
+      try {
+        const res = await api.post('/api/v1/user/admin/login/', { email, password });
+        data = res.data as Record<string, unknown>;
+      } catch (adminErr) {
+        if (!axios.isAxiosError(adminErr)) throw adminErr;
+        const status = adminErr.response?.status;
+        if (status !== 400 && status !== 401) throw adminErr;
+        const res = await api.post('/api/v1/user/login/', { email, password });
+        data = res.data as Record<string, unknown>;
+      }
 
-      const accessToken = data?.access ?? data?.token ?? data?.access_token ?? data?.data?.access;
-      const refreshToken = data?.refresh ?? data?.refresh_token ?? data?.data?.refresh;
-
-      if (accessToken) localStorage.setItem('auth_token', accessToken);
-      if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
-      if (data?.user) localStorage.setItem('auth_user', JSON.stringify(data.user));
-
+      persistSession(data, email);
       navigate('/dashboard');
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        const msg =
-          err.response?.data?.message ??
-          err.response?.data?.detail ??
-          err.response?.data?.error ??
-          'Invalid email or password.';
-        setError(typeof msg === 'string' ? msg : 'Invalid email or password.');
-      } else {
+      if (axios.isAxiosError(err) && !err.response) {
         setError('Unable to connect. Please try again.');
+      } else {
+        setError(parseApiError(err));
       }
     } finally {
       setLoading(false);
