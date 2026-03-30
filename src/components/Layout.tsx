@@ -22,6 +22,7 @@ const ROUTES: Record<string, RouteConfig> = {
   '/sales/credit-notes/add': { title: 'Add Credit Note', parent: 'Sales' },
   '/purchase':   { title: 'Purchase' },
   '/purchase/bills': { title: 'Bills', parent: 'Purchase' },
+  '/purchase/suppliers/add': { title: 'Add Supplier', parent: 'Purchase / Suppliers' },
   '/purchase/suppliers': { title: 'Suppliers', parent: 'Purchase' },
   '/purchase/supplier-payments': { title: 'Supplier Payments', parent: 'Purchase' },
   '/purchase/supplier-payments/add': { title: 'Add Supplier Payment', parent: 'Purchase' },

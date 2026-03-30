@@ -58,6 +58,125 @@ const labelSt: React.CSSProperties = {
   fontSize: 12.5, fontWeight: 500, color: '#555', marginBottom: 4, display: 'block',
 };
 
+const PAGE_BG = '#F2F7F6';
+const PAGE_TEXT = '#010101';
+
+function digitsOnly(v: string) {
+  return v.replace(/\D+/g, '');
+}
+
+function isValidTrn15(v: string) {
+  const s = digitsOnly(v);
+  return s.length === 15 && s.startsWith('3') && s.endsWith('3');
+}
+
+function ArToggleButton({ onClick, opened }: { onClick: () => void; opened: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        height: 22,
+        paddingInline: 6,
+        borderRadius: 6,
+        border: 'none',
+        backgroundColor: 'transparent',
+        color: '#0f766e',
+        cursor: 'pointer',
+        fontSize: 12.5,
+        fontWeight: 600,
+        letterSpacing: 0.4,
+        opacity: opened ? 0.75 : 1,
+      }}
+      aria-label="Toggle Arabic input"
+      title="Add Arabic"
+    >
+      +ar
+    </button>
+  );
+}
+
+function RadioOption({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#111827', cursor: 'pointer' }}>
+      <span
+        aria-hidden
+        style={{
+          width: 13,
+          height: 13,
+          borderRadius: '50%',
+          border: `1.5px solid ${checked ? '#35C0A3' : '#b8c2cc'}`,
+          backgroundColor: '#fff',
+          boxShadow: 'none',
+          outline: 'none',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            backgroundColor: checked ? '#35C0A3' : 'transparent',
+          }}
+        />
+      </span>
+      <input
+        type="radio"
+        checked={checked}
+        onChange={onChange}
+        style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
+      />
+      {label}
+    </label>
+  );
+}
+
+function InlineArInput({
+  value,
+  onChange,
+  placeholder,
+  arShown,
+  onToggleAr,
+  disabled,
+  required,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  arShown: boolean;
+  onToggleAr: () => void;
+  disabled?: boolean;
+  required?: boolean;
+}) {
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+        disabled={disabled}
+        style={{ ...inputSt, paddingRight: 52 }}
+        placeholder={placeholder}
+      />
+      <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)' }}>
+        <ArToggleButton opened={arShown} onClick={onToggleAr} />
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ active }: { active: boolean }) {
   return (
     <span style={{
@@ -71,15 +190,27 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function SectionHeader({ title, required, right }: { title: string; required?: boolean; right?: React.ReactNode }) {
+function SectionHeader({
+  title,
+  required,
+  right,
+  bgColor = '#f3f4f6',
+  textColor = '#4b5563',
+}: {
+  title: string;
+  required?: boolean;
+  right?: React.ReactNode;
+  bgColor?: string;
+  textColor?: string;
+}) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      backgroundColor: '#f3f4f6', padding: '10px 14px',
+      backgroundColor: bgColor, padding: '12px 18px',
       borderTopLeftRadius: 10, borderTopRightRadius: 10,
       borderBottom: '1px solid #edf2f7',
     }}>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563' }}>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: textColor }}>
         {title} {required && <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Required)</span>}
       </span>
       {right}
@@ -129,12 +260,18 @@ function SuppliersModal({
   const [openingAmount, setOpeningAmount] = useState(initial?.opening_balance_amount ?? '');
   const [openingAsOf, setOpeningAsOf] = useState(initial?.opening_balance_as_of ?? '');
   const [openingAccount, setOpeningAccount] = useState(initial?.opening_balance_account ?? '');
-  const [isActive, setIsActive] = useState(initial?.is_active ?? true);
+  const [isActive] = useState(initial?.is_active ?? true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const showOpening = openingType !== 'none';
+  const showTaxReg = vatTreatment !== 'not_vat_registered_ksa';
+
+  const [showCompanyNameAr, setShowCompanyNameAr] = useState(Boolean((initial?.company_name_ar ?? '').trim()));
+  const [showStreetAr, setShowStreetAr] = useState(Boolean((initial?.street_address_ar ?? '').trim()));
+  const [showDistrictAr, setShowDistrictAr] = useState(Boolean((initial?.district_ar ?? '').trim()));
+  const [showCityAr, setShowCityAr] = useState(Boolean((initial?.city_ar ?? '').trim()));
 
   useEffect(() => {
     if (mode !== 'edit' || !initial) return;
@@ -160,7 +297,10 @@ function SuppliersModal({
     setOpeningAmount(initial.opening_balance_amount ?? '');
     setOpeningAsOf(initial.opening_balance_as_of ?? '');
     setOpeningAccount(initial.opening_balance_account ?? '');
-    setIsActive(initial.is_active ?? true);
+    setShowCompanyNameAr(Boolean((initial.company_name_ar ?? '').trim()));
+    setShowStreetAr(Boolean((initial.street_address_ar ?? '').trim()));
+    setShowDistrictAr(Boolean((initial.district_ar ?? '').trim()));
+    setShowCityAr(Boolean((initial.city_ar ?? '').trim()));
     setError('');
   }, [mode, initial]);
 
@@ -186,6 +326,17 @@ function SuppliersModal({
     e.preventDefault();
     setError('');
 
+    if (showTaxReg) {
+      if (!trn.trim()) {
+        setError('Tax registration number is required for this VAT treatment.');
+        return;
+      }
+      if (!isValidTrn15(trn)) {
+        setError('Tax registration number must be 15 digits and start/end with 3.');
+        return;
+      }
+    }
+
     // Frontend guardrails to match backend expectations.
     if (openingType !== 'none') {
       const amt = Number(openingAmount);
@@ -208,7 +359,7 @@ function SuppliersModal({
         email,
         phone,
         vat_treatment: vatTreatment,
-        tax_registration_number: trn,
+        tax_registration_number: showTaxReg ? digitsOnly(trn) : null,
         country: country || null,
         street_address: street,
         street_address_ar: streetAr,
@@ -241,11 +392,8 @@ function SuppliersModal({
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ backgroundColor: '#fff', borderRadius: 14, padding: '18px 22px 18px', width: 980, maxHeight: '92vh', overflowY: 'auto',
-        boxShadow: '0 10px 40px rgba(0,0,0,0.17)', fontFamily: "'Heebo', sans-serif" }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+    <div style={{ backgroundColor: '#ffffff', color: PAGE_TEXT, borderRadius: 14, padding: '16px 16px 18px', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <span style={{ fontSize: 14.5, fontWeight: 600, color: '#1a1a1a' }}>
             {mode === 'create' ? 'Create Supplier' : 'Edit Supplier'}
           </span>
@@ -259,8 +407,9 @@ function SuppliersModal({
               {loading ? 'Saving…' : 'Save'}
             </button>
           </div>
-        </div>
+      </div>
 
+      <div style={{ width: '100%', maxWidth: 760 }}>
         {error && (
           <div style={{ backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13, marginBottom: 12 }}>
             {error}
@@ -269,38 +418,46 @@ function SuppliersModal({
 
         <form id="supplier-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Basic information */}
-          <div style={{ borderRadius: 10, border: '1px solid #edf2f7', backgroundColor: '#fafafa', padding: 0, overflow: 'hidden' }}>
-            <SectionHeader title="Basic Information" />
-            <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '160px minmax(0, 1fr) minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
-                <span style={labelSt}>Company Name*</span>
-                <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required style={inputSt} placeholder="English" />
-                <input value={companyNameAr} onChange={(e) => setCompanyNameAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
-
-                <span style={labelSt}>Primary Contact Name</span>
-                <input value={primaryContact} onChange={(e) => setPrimaryContact(e.target.value)} style={inputSt} />
+          <div style={{ borderRadius: 10, border: '1px solid #edf2f7', backgroundColor: PAGE_BG, padding: 0, overflow: 'hidden' }}>
+            <SectionHeader title="Basic Information" bgColor={PAGE_BG} textColor={PAGE_TEXT} />
+            <div style={{ padding: '18px 18px', backgroundColor: '#ffffff', color: PAGE_TEXT }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px minmax(0, 1fr)', gap: 14, alignItems: 'center' }}>
+                <span style={{ ...labelSt, color: PAGE_TEXT }}>Company Name*</span>
+                <InlineArInput
+                  value={companyName}
+                  onChange={setCompanyName}
+                  placeholder="Empty"
+                  arShown={showCompanyNameAr}
+                  onToggleAr={() => setShowCompanyNameAr((p) => !p)}
+                  required
+                />
                 <div />
+                {showCompanyNameAr ? (
+                  <input value={companyNameAr} onChange={(e) => setCompanyNameAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
+                ) : <div />}
 
-                <span style={labelSt}>Email*</span>
-                <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputSt} required />
-                <div />
+                <span style={{ ...labelSt, color: PAGE_TEXT }}>Primary Contact Name</span>
+                <input value={primaryContact} onChange={(e) => setPrimaryContact(e.target.value)} style={inputSt} placeholder="Empty" />
 
-                <span style={labelSt}>Phone Number</span>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputSt} />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 12.5, color: '#666' }}>Status</span>
-                  <button type="button" onClick={() => setIsActive((p) => !p)}
-                    style={{ width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', backgroundColor: isActive ? '#35C0A3' : '#d1d5db', position: 'relative', transition: 'background-color 0.2s' }}>
-                    <span style={{ position: 'absolute', top: 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', left: isActive ? 21 : 3, transition: 'left 0.2s' }} />
-                  </button>
-                </div>
+                <span style={{ ...labelSt, color: PAGE_TEXT }}>Email*</span>
+                <input value={email} onChange={(e) => setEmail(e.target.value)} style={inputSt} required placeholder="Empty" />
+
+                <span style={{ ...labelSt, color: PAGE_TEXT }}>Phone Number</span>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(digitsOnly(e.target.value))}
+                  style={inputSt}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="Empty"
+                />
               </div>
             </div>
           </div>
 
           {/* Tax information */}
           <div style={{ borderRadius: 10, border: '1px solid #edf2f7', backgroundColor: '#fafafa', overflow: 'hidden' }}>
-            <SectionHeader title="Tax Information" right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
+            <SectionHeader title="Tax Information" bgColor={PAGE_BG} textColor={PAGE_TEXT} right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
             <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, alignItems: 'center' }}>
                 <span style={labelSt}>VAT Treatment*</span>
@@ -310,24 +467,39 @@ function SuppliersModal({
                     { id: 'not_vat_registered_ksa', label: 'Not VAT registered in KSA' },
                     { id: 'outside_ksa', label: 'Outside KSA' },
                   ]).map((c) => (
-                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#111827' }}>
-                      <input type="radio" checked={vatTreatment === c.id} onChange={() => setVatTreatment(c.id as VatTreatment)} style={{ accentColor: '#35C0A3' }} />
-                      {c.label}
-                    </label>
+                    <RadioOption
+                      key={c.id}
+                      checked={vatTreatment === c.id}
+                      onChange={() => setVatTreatment(c.id as VatTreatment)}
+                      label={c.label}
+                    />
                   ))}
                 </div>
 
-                <span style={labelSt}>TAX Registration Number*</span>
-                <input value={trn} onChange={(e) => setTrn(e.target.value)} style={inputSt} required />
+                {showTaxReg ? (
+                  <>
+                    <span style={labelSt}>TAX Registration Number*</span>
+                    <input
+                      value={trn}
+                      onChange={(e) => setTrn(digitsOnly(e.target.value))}
+                      style={inputSt}
+                      required
+                      inputMode="numeric"
+                      pattern="\\d{15}"
+                      maxLength={15}
+                      placeholder="15 digits (starts and ends with 3)"
+                    />
+                  </>
+                ) : null}
               </div>
             </div>
           </div>
 
           {/* Address */}
           <div style={{ borderRadius: 10, border: '1px solid #edf2f7', backgroundColor: '#fafafa', overflow: 'hidden' }}>
-            <SectionHeader title="Address" right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
+            <SectionHeader title="Address" bgColor={PAGE_BG} textColor={PAGE_TEXT} right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
             <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '160px minmax(0, 1fr) minmax(0, 1fr)', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px minmax(0, 1fr)', gap: 14, alignItems: 'center' }}>
                 <span style={labelSt}>Country</span>
                 <select
                   value={country}
@@ -338,38 +510,64 @@ function SuppliersModal({
                   <option value="">{countries.length ? 'Select' : 'Loading…'}</option>
                   {countries.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
-                <div />
 
                 <span style={labelSt}>Street Address*</span>
-                <input value={street} onChange={(e) => setStreet(e.target.value)} style={inputSt} required placeholder="English" />
-                <input value={streetAr} onChange={(e) => setStreetAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
+                <InlineArInput
+                  value={street}
+                  onChange={setStreet}
+                  placeholder="Empty"
+                  arShown={showStreetAr}
+                  onToggleAr={() => setShowStreetAr((p) => !p)}
+                  required
+                />
+                <div />
+                {showStreetAr ? (
+                  <input value={streetAr} onChange={(e) => setStreetAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
+                ) : <div />}
 
                 <span style={labelSt}>Building Number*</span>
-                <input value={building} onChange={(e) => setBuilding(e.target.value)} style={inputSt} required />
-                <div />
+                <input value={building} onChange={(e) => setBuilding(e.target.value)} style={inputSt} required placeholder="Empty" />
 
                 <span style={labelSt}>Land Identifier*</span>
-                <input value={landId} onChange={(e) => setLandId(e.target.value)} style={inputSt} required />
-                <div />
+                <input value={landId} onChange={(e) => setLandId(e.target.value)} style={inputSt} required placeholder="Empty" />
 
                 <span style={labelSt}>District*</span>
-                <input value={district} onChange={(e) => setDistrict(e.target.value)} style={inputSt} required placeholder="English" />
-                <input value={districtAr} onChange={(e) => setDistrictAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
+                <InlineArInput
+                  value={district}
+                  onChange={setDistrict}
+                  placeholder="Empty"
+                  arShown={showDistrictAr}
+                  onToggleAr={() => setShowDistrictAr((p) => !p)}
+                  required
+                />
+                <div />
+                {showDistrictAr ? (
+                  <input value={districtAr} onChange={(e) => setDistrictAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
+                ) : <div />}
 
                 <span style={labelSt}>City*</span>
-                <input value={city} onChange={(e) => setCity(e.target.value)} style={inputSt} required placeholder="English" />
-                <input value={cityAr} onChange={(e) => setCityAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
+                <InlineArInput
+                  value={city}
+                  onChange={setCity}
+                  placeholder="Empty"
+                  arShown={showCityAr}
+                  onToggleAr={() => setShowCityAr((p) => !p)}
+                  required
+                />
+                <div />
+                {showCityAr ? (
+                  <input value={cityAr} onChange={(e) => setCityAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
+                ) : <div />}
 
                 <span style={labelSt}>Postal Code*</span>
-                <input value={postal} onChange={(e) => setPostal(e.target.value)} style={inputSt} required />
-                <div />
+                <input value={postal} onChange={(e) => setPostal(e.target.value)} style={inputSt} required placeholder="Empty" />
               </div>
             </div>
           </div>
 
           {/* Financial settings */}
           <div style={{ borderRadius: 10, border: '1px solid #edf2f7', backgroundColor: '#fafafa', overflow: 'hidden' }}>
-            <SectionHeader title="Financial Settings" right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
+            <SectionHeader title="Financial Settings" bgColor={PAGE_BG} textColor={PAGE_TEXT} right={<ChevronDown size={16} style={{ color: '#9ca3af' }} />} />
             <div style={{ padding: '14px 16px', backgroundColor: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, alignItems: 'center' }}>
                 <span style={labelSt}>Payment Terms*</span>
@@ -385,10 +583,12 @@ function SuppliersModal({
                     { id: 'i_owe_vendor', label: 'I owe this vendor' },
                     { id: 'vendor_owes_me', label: 'Vendor owes me' },
                   ]).map((c) => (
-                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#111827' }}>
-                      <input type="radio" checked={openingType === c.id} onChange={() => setOpeningType(c.id as OpeningBalanceType)} style={{ accentColor: '#35C0A3' }} />
-                      {c.label}
-                    </label>
+                    <RadioOption
+                      key={c.id}
+                      checked={openingType === c.id}
+                      onChange={() => setOpeningType(c.id as OpeningBalanceType)}
+                      label={c.label}
+                    />
                   ))}
                 </div>
 
@@ -577,6 +777,46 @@ export default function Suppliers() {
     return (id: string | null) => (id && m.get(id)) || id || '—';
   }, [choices]);
 
+  // Render create/edit as a full page (not an overlay).
+  if (showCreate) {
+    return (
+      <div style={{ backgroundColor: '#ffffff', color: PAGE_TEXT, minHeight: 'calc(100vh - 52px)' }}>
+        <SuppliersModal
+          key="supplier-page-create"
+          mode="create"
+          choices={choices}
+          countries={countries}
+          accounts={accounts}
+          onClose={() => {
+            setShowCreate(false);
+            if (pathname === '/purchase/suppliers/add') navigate('/purchase/suppliers', { replace: true });
+          }}
+          onSaved={(s) => {
+            onSaved(s);
+            if (pathname === '/purchase/suppliers/add') navigate('/purchase/suppliers', { replace: true });
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (editRow) {
+    return (
+      <div style={{ backgroundColor: '#ffffff', color: PAGE_TEXT, minHeight: 'calc(100vh - 52px)' }}>
+        <SuppliersModal
+          key={editRow.id}
+          mode="edit"
+          initial={editRow}
+          choices={choices}
+          countries={countries}
+          accounts={accounts}
+          onClose={() => setEditRow(null)}
+          onSaved={onSaved}
+        />
+      </div>
+    );
+  }
+
   const TH: React.CSSProperties = {
     padding: '10px 14px', fontSize: 12.5, fontWeight: 500, color: '#888',
     borderBottom: '1px solid #e9ecef', borderRight: '1px solid #e9ecef', backgroundColor: '#fafafa',
@@ -727,26 +967,6 @@ export default function Suppliers() {
         )}
       </div>
 
-      {showCreate && (
-        <SuppliersModal
-          key="supplier-modal-create"
-          mode="create"
-          choices={choices}
-          countries={countries}
-          accounts={accounts}
-          onClose={() => {
-            setShowCreate(false);
-            if (pathname === '/purchase/suppliers/add') navigate('/purchase/suppliers', { replace: true });
-          }}
-          onSaved={(s) => {
-            onSaved(s);
-            if (pathname === '/purchase/suppliers/add') navigate('/purchase/suppliers', { replace: true });
-          }}
-        />
-      )}
-      {editRow && (
-        <SuppliersModal key={editRow.id} mode="edit" initial={editRow} choices={choices} countries={countries} accounts={accounts} onClose={() => setEditRow(null)} onSaved={onSaved} />
-      )}
     </div>
   );
 }
