@@ -359,7 +359,11 @@ function DebitNotesEditor() {
 
   const canEdit = status === 'draft';
 
-  const subtotal = useMemo(() => lines.reduce((acc, l) => acc + ((Number(l.quantity) || 0) * (Number(l.unit_price) || 0)), 0), [lines]);
+  const subtotal = useMemo(() => lines.reduce((acc, l) => {
+    const base = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
+    const disc = Number(l.discount_percent) || 0;
+    return acc + (base - (base * disc / 100));
+  }, 0), [lines]);
   const totalVat = useMemo(() => lines.reduce((acc, l) => {
     const lineBase = ((Number(l.quantity) || 0) * (Number(l.unit_price) || 0));
     const disc = Number(l.discount_percent) || 0;
@@ -474,7 +478,7 @@ function DebitNotesEditor() {
         : await api.post<DebitNoteDetail>('/api/v1/purchases/debit-notes/', body);
       setDebitNoteId(data.id);
       setStatus(data.status);
-      if (!id || id === 'add') nav(`/purchase/debit-notes/${data.id}`, { replace: true });
+      nav('/purchase/debit-notes', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
