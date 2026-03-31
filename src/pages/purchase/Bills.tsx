@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Search, SlidersHorizontal, Trash2, UploadCloud } from 'lucide-react';
+import { Check, ChevronDown, Plus, RotateCcw, Search, SlidersHorizontal, Trash2, UploadCloud } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
@@ -110,6 +110,337 @@ const inputSt: React.CSSProperties = {
   outline: 'none',
   fontFamily: "'Heebo', sans-serif",
   backgroundColor: '#fff',
+};
+
+const createSectionHeaderSt: React.CSSProperties = {
+  width: 600,
+  height: 42,
+  background: '#F2F7F6',
+  borderRadius: 6,
+  padding: '16px 40px',
+  boxSizing: 'border-box',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 500,
+  fontSize: 14,
+  lineHeight: '21px',
+  letterSpacing: '0.03em',
+  color: '#010101',
+  display: 'flex',
+  alignItems: 'center',
+};
+
+/** Full-width section title bar — matches image1 */
+const sectionHeaderBarFullSt: React.CSSProperties = {
+  ...createSectionHeaderSt,
+  width: '100%',
+  maxWidth: '100%',
+  background: '#F2F7F6',
+  borderRadius: 0,
+};
+
+const BILL_LINE_H_PAD = 40;
+
+/** Line items grid — create bill editor (flex rows, fixed column widths) */
+const BILL_LINE_GRID_WIDTH = 834;
+const BILL_LINE_GAP = 15;
+
+/** Line item/s toolbar — merge row + price mode (aligned with table / Bill form horizontal padding) */
+const billLineToolbarHostSt: React.CSSProperties = {
+  borderBottom: '1px solid #edf2f7',
+  backgroundColor: '#fff',
+  boxSizing: 'border-box',
+  minHeight: 65,
+  padding: '22px 40px',
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 16,
+};
+
+const billLineMergeLabelTextSt: React.CSSProperties = {
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 12,
+  lineHeight: '18px',
+  letterSpacing: '0.03em',
+  color: '#0E4D41',
+};
+
+const billLinePriceModeShellSt: React.CSSProperties = {
+  boxSizing: 'border-box',
+  width: 124,
+  minHeight: 22,
+  padding: '6px 10px',
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  border: '0.8px solid #979797',
+  borderRadius: 2,
+  backgroundColor: '#fff',
+  flexShrink: 0,
+};
+
+const billLinePriceModeSelectSt: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  height: '100%',
+  border: 'none',
+  outline: 'none',
+  margin: 0,
+  padding: 0,
+  backgroundColor: 'transparent',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 12,
+  lineHeight: '18px',
+  letterSpacing: '0.02em',
+  color: '#616161',
+  cursor: 'pointer',
+  appearance: 'none' as const,
+  WebkitAppearance: 'none',
+};
+
+const billLineFooterBtnBaseSt: React.CSSProperties = {
+  boxSizing: 'border-box',
+  display: 'flex',
+  flexDirection: 'row',
+  flexWrap: 'nowrap',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '6px 10px',
+  gap: 4,
+  height: 22,
+  border: '0.8px solid #979797',
+  borderRadius: 2,
+  backgroundColor: '#fff',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 12,
+  lineHeight: '18px',
+  letterSpacing: '0.02em',
+  color: '#616161',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+};
+
+const billLineFooterAddBtnSt: React.CSSProperties = { ...billLineFooterBtnBaseSt, width: 77 };
+const billLineFooterClearBtnSt: React.CSSProperties = { ...billLineFooterBtnBaseSt, width: 86 };
+
+const billLineTotalsSubtotalRowSt: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 0,
+  gap: 167,
+  width: 259,
+  minHeight: 10,
+  boxSizing: 'border-box',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 500,
+  fontSize: 14,
+  lineHeight: '21px',
+  letterSpacing: '0.02em',
+  color: '#303030',
+};
+
+const billLineTotalsVatRowSt: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 0,
+  gap: 160,
+  width: 259,
+  minHeight: 10,
+  boxSizing: 'border-box',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 14,
+  lineHeight: '21px',
+  letterSpacing: '0.02em',
+  color: '#616161',
+};
+
+const billLineTotalsGrandRowSt: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 0,
+  gap: 85,
+  width: 259,
+  height: 24,
+  boxSizing: 'border-box',
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 20,
+  lineHeight: '29px',
+  letterSpacing: '0.02em',
+  color: '#303030',
+};
+
+const billLineTotalsHrSt: React.CSSProperties = {
+  width: 268,
+  height: 0,
+  border: 'none',
+  borderTop: '2px solid #DEDEDE',
+  margin: 0,
+  padding: 0,
+};
+
+const billLineTheadTrSt: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: '0px 12px',
+  gap: BILL_LINE_GAP,
+  width: BILL_LINE_GRID_WIDTH,
+  minWidth: BILL_LINE_GRID_WIDTH,
+  height: 26,
+  boxSizing: 'border-box',
+  background: '#EFF6E2',
+  borderRadius: 6,
+};
+
+const billLineThText: React.CSSProperties = {
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 11,
+  lineHeight: '16px',
+  letterSpacing: '0.03em',
+  color: '#303030',
+  boxSizing: 'border-box',
+  padding: '8px 12px',
+  height: 26,
+  display: 'flex',
+  alignItems: 'center',
+  flexShrink: 0,
+  margin: 0,
+};
+
+const billLineThDesc: React.CSSProperties = { ...billLineThText, width: 175, flex: '0 0 175px' };
+const billLineThAcct: React.CSSProperties = { ...billLineThText, width: 135, flex: '0 0 135px' };
+const billLineThQty: React.CSSProperties = { ...billLineThText, width: 53, flex: '0 0 53px' };
+const billLineThPrice: React.CSSProperties = { ...billLineThText, width: 80, flex: '0 0 80px' };
+const billLineThTax: React.CSSProperties = { ...billLineThText, width: 135, flex: '0 0 135px' };
+const billLineThDisc: React.CSSProperties = { ...billLineThText, width: 80, flex: '0 0 80px', justifyContent: 'flex-end' };
+const billLineThTotal: React.CSSProperties = { ...billLineThText, width: 62, flex: '0 0 62px', justifyContent: 'flex-end' };
+
+const billLineTbodyTrSt: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  padding: 12,
+  gap: BILL_LINE_GAP,
+  width: BILL_LINE_GRID_WIDTH,
+  minWidth: BILL_LINE_GRID_WIDTH,
+  minHeight: 52,
+  boxSizing: 'border-box',
+};
+
+const billLineTdText: React.CSSProperties = {
+  fontFamily: "'Heebo', sans-serif",
+  fontStyle: 'normal',
+  fontWeight: 400,
+  fontSize: 12,
+  lineHeight: '18px',
+  letterSpacing: '0.03em',
+  color: '#979797',
+};
+
+const billLineDescShell: React.CSSProperties = {
+  boxSizing: 'border-box',
+  padding: '9px 12px',
+  width: 174,
+  height: 'auto',
+  minHeight: 28,
+  flex: '0 0 174px',
+  border: '0.8px solid #979797',
+  borderRadius: 4,
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: 4,
+  backgroundColor: '#fff',
+};
+
+const billLineSelectShell: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '8px 10px',
+  gap: 51,
+  width: 135,
+  flex: '0 0 135px',
+  height: 28,
+  boxSizing: 'border-box',
+  border: '0.8px solid #979797',
+  borderRadius: 4,
+  backgroundColor: '#FFFFFF',
+};
+
+const billLineNumericShellEnd: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'row',
+  justifyContent: 'flex-end',
+  alignItems: 'center',
+  padding: '9px 12px',
+  gap: 10,
+  height: 28,
+  boxSizing: 'border-box',
+  border: '0.8px solid #979797',
+  borderRadius: 4,
+  backgroundColor: '#fff',
+};
+
+const billLineQtyShell: React.CSSProperties = { ...billLineNumericShellEnd, width: 53, flex: '0 0 53px' };
+const billLinePriceShell: React.CSSProperties = { ...billLineNumericShellEnd, width: 80, flex: '0 0 80px' };
+const billLineDiscShell: React.CSSProperties = { ...billLineNumericShellEnd, width: 80, flex: '0 0 80px' };
+const billLineTotalShell: React.CSSProperties = {
+  ...billLineNumericShellEnd,
+  width: 63,
+  flex: '0 0 63px',
+  border: 'none',
+  backgroundColor: 'transparent',
+};
+
+const billLineInputBare: React.CSSProperties = {
+  ...billLineTdText,
+  border: 'none',
+  outline: 'none',
+  backgroundColor: 'transparent',
+  padding: 0,
+  margin: 0,
+  width: '100%',
+  minWidth: 0,
+};
+
+const billLineSelectBare: React.CSSProperties = {
+  ...billLineTdText,
+  border: 'none',
+  outline: 'none',
+  backgroundColor: 'transparent',
+  padding: 0,
+  margin: 0,
+  flex: 1,
+  minWidth: 0,
+  cursor: 'pointer',
+  appearance: 'none' as const,
+  WebkitAppearance: 'none',
 };
 
 function statusPill(status: BillStatus) {
@@ -554,6 +885,9 @@ function BillsEditor() {
   function removeLine(idx: number) {
     setLines((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
   }
+  function resetLinesToDefault() {
+    setLines([{ description_text: '', selected_products: [], account: '', quantity: '1', unit_price: '', tax_rate: '', discount_percent: '0' }]);
+  }
 
   async function saveDraft(navigateAfterCreate = true): Promise<string | null> {
     if (!canEdit) return null;
@@ -653,19 +987,71 @@ function BillsEditor() {
     return <div style={{ padding: '24px 28px', color: '#999', fontFamily: "'Heebo', sans-serif" }}>Loading…</div>;
   }
 
-  const TH: React.CSSProperties = {
-    padding: '8px 8px', fontSize: 11.5, fontWeight: 500, color: '#888',
-    borderBottom: '1px solid #e9ecef', borderRight: '1px solid #e9ecef',
-    backgroundColor: '#fafafa', whiteSpace: 'nowrap', textAlign: 'left',
+  const editorLabelSt: React.CSSProperties = {
+    fontFamily: "'Heebo', sans-serif",
+    fontStyle: 'normal',
+    fontWeight: 400,
+    fontSize: 12,
+    lineHeight: '18px',
+    letterSpacing: '0.03em',
+    color: '#303030',
   };
-  const TD: React.CSSProperties = {
-    padding: '6px 8px', fontSize: 12.5, color: '#333',
-    borderBottom: '1px solid #eef2f5', borderRight: '1px solid #eef2f5',
-    verticalAlign: 'middle',
+
+  const editorInputNoIconSt: React.CSSProperties = {
+    boxSizing: 'border-box',
+    width: 394,
+    height: 32,
+    border: '0.8px solid #979797',
+    borderRadius: 5,
+    padding: '11px 18px',
+    fontFamily: "'Heebo', sans-serif",
+    fontSize: 13,
+    lineHeight: '19px',
+    letterSpacing: '0.03em',
+    color: '#1a1a1a',
+    outline: 'none',
+    backgroundColor: '#fff',
+  };
+
+  const editorInputWithIconSt: React.CSSProperties = {
+    boxSizing: 'border-box',
+    width: 393,
+    height: 32,
+    border: '0.8px solid #979797',
+    borderRadius: 5,
+    padding: '9px 18px',
+    fontFamily: "'Heebo', sans-serif",
+    fontSize: 13,
+    lineHeight: '19px',
+    letterSpacing: '0.03em',
+    color: '#1a1a1a',
+    outline: 'none',
+    backgroundColor: '#fff',
   };
 
   return (
-    <div style={{ padding: '24px 28px', fontFamily: "'Heebo', sans-serif", height: '100%', overflowY: 'auto', boxSizing: 'border-box', backgroundColor: '#f4f6f8' }}>
+    <div className="bill-create-editor" style={{ padding: '24px 28px', fontFamily: "'Heebo', sans-serif", height: '100%', overflowY: 'auto', boxSizing: 'border-box', backgroundColor: '#f4f6f8' }}>
+      <style>{`
+        .bill-create-editor input::placeholder,
+        .bill-create-editor textarea::placeholder {
+          font-family: 'Heebo', sans-serif;
+          font-style: normal;
+          font-weight: 400;
+          font-size: 13px;
+          line-height: 19px;
+          letter-spacing: 0.03em;
+          color: #979797;
+        }
+        .bill-create-editor .bill-line-ph::placeholder {
+          font-family: 'Heebo', sans-serif;
+          font-style: normal;
+          font-weight: 400;
+          font-size: 12px;
+          line-height: 18px;
+          letter-spacing: 0.03em;
+          color: #979797;
+        }
+      `}</style>
       <div style={{ backgroundColor: '#fff', borderRadius: 12, border: '1px solid #efefef', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid #f0f0f0' }}>
@@ -674,12 +1060,14 @@ function BillsEditor() {
             {statusPill(status)}
             <button onClick={() => nav('/purchase/bills')} style={{ height: 32, paddingInline: 12, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#555', cursor: 'pointer', fontSize: 13.5 }}>Cancel</button>
             {canEdit && (
-              <button onClick={() => { void saveDraft(); }} disabled={saving} style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#666', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13.5 }}>
+              <button onClick={() => { void saveDraft(); }} disabled={saving} style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#666', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <img src="/FileDashed.png" alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
                 {saving ? 'Saving…' : 'Save as Draft'}
               </button>
             )}
             {canEdit && (
-              <button onClick={postBill} disabled={posting} style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: posting ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: posting ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600 }}>
+              <button onClick={postBill} disabled={posting} style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: posting ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: posting ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <img src="/BookOpen.png" alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
                 {posting ? 'Posting…' : 'Confirm & Post'}
               </button>
             )}
@@ -697,27 +1085,27 @@ function BillsEditor() {
           {/* Left side */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', borderBottom: '1px solid #edf2f7', fontSize: 12.5, fontWeight: 600, color: '#4b5563' }}>
+              <div style={{ ...sectionHeaderBarFullSt, borderBottom: '1px solid #edf2f7' }}>
                 Bill Information
               </div>
-              <div style={{ padding: 12, display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10, alignItems: 'center' }}>
-                <span style={{ fontSize: 12.5, color: '#555' }}>Bill Number*</span>
-                <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Empty" />
+              <div style={{ padding: '30px 40px', width: 600, minHeight: 264, display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 25, columnGap: 14, alignItems: 'center' }}>
+                <span style={editorLabelSt}>Bill Number*</span>
+                <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} disabled={!canEdit} style={{ ...editorInputNoIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Empty" />
 
-                <span style={{ fontSize: 12.5, color: '#555' }}>External ref.</span>
-                <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional — ERP dedupe id" title="Must be unique per supplier when set" />
+                <span style={editorLabelSt}>External ref.</span>
+                <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...editorInputNoIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional — ERP dedupe id" title="Must be unique per supplier when set" />
 
-                <span style={{ fontSize: 12.5, color: '#555' }}>Supplier*</span>
-                <select value={supplier} onChange={(e) => setSupplier(e.target.value)} disabled={!canEdit} style={{ ...inputSt, cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#fff' : '#f5f5f5' }}>
+                <span style={editorLabelSt}>Supplier*</span>
+                <select value={supplier} onChange={(e) => setSupplier(e.target.value)} disabled={!canEdit} style={{ ...editorInputWithIconSt, cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#fff' : '#f5f5f5' }}>
                   <option value="">Select</option>
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.company_name}</option>)}
                 </select>
 
-                <span style={{ fontSize: 12.5, color: '#555' }}>Date*</span>
-                <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
+                <span style={editorLabelSt}>Date*</span>
+                <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} disabled={!canEdit} style={{ ...editorInputWithIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
 
-                <span style={{ fontSize: 12.5, color: '#555' }}>Due Date*</span>
-                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
+                <span style={editorLabelSt}>Due Date*</span>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} style={{ ...editorInputWithIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
 
                 {canEdit && (
                   <>
@@ -749,159 +1137,301 @@ function BillsEditor() {
 
             {/* Lines */}
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', borderBottom: '1px solid #edf2f7', fontSize: 12.5, fontWeight: 600, color: '#4b5563' }}>
+              <div style={{ ...sectionHeaderBarFullSt, borderBottom: '1px solid #edf2f7' }}>
                 Line item/s
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: '1px solid #edf2f7', backgroundColor: '#fff' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#4b5563' }}>
-                  <input type="checkbox" checked={mergeLineItem} onChange={(e) => setMergeLineItem(e.target.checked)} disabled={!canEdit} style={{ accentColor: '#35C0A3' }} />
-                  Merge line item
+              <div style={billLineToolbarHostSt}>
+                <label
+                  style={{
+                    position: 'relative',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    cursor: canEdit ? 'pointer' : 'not-allowed',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={mergeLineItem}
+                    onChange={(e) => setMergeLineItem(e.target.checked)}
+                    disabled={!canEdit}
+                    style={{
+                      position: 'absolute',
+                      width: 1,
+                      height: 1,
+                      padding: 0,
+                      margin: -1,
+                      overflow: 'hidden',
+                      clip: 'rect(0,0,0,0)',
+                      clipPath: 'inset(50%)',
+                      whiteSpace: 'nowrap',
+                      border: 0,
+                    }}
+                  />
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 2,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxSizing: 'border-box',
+                      border: mergeLineItem ? '1px solid transparent' : '1.5px solid #0E4D41',
+                      backgroundColor: mergeLineItem ? '#35C0A3' : '#fff',
+                    }}
+                  >
+                    {mergeLineItem ? <Check size={10} strokeWidth={2.5} color="#fff" /> : null}
+                  </span>
+                  <span style={billLineMergeLabelTextSt}>Merge line item</span>
                 </label>
-                <select value={priceMode} onChange={(e) => setPriceMode(e.target.value as 'inc_tax' | 'ex_tax')} disabled={!canEdit}
-                  style={{ ...inputSt, width: 130, height: 28, fontSize: 11.5, color: '#666' }}>
-                  <option value="inc_tax">Price are inc.tax</option>
-                  <option value="ex_tax">Price are ex.tax</option>
-                </select>
+                <div style={billLinePriceModeShellSt}>
+                  <select
+                    value={priceMode}
+                    onChange={(e) => setPriceMode(e.target.value as 'inc_tax' | 'ex_tax')}
+                    disabled={!canEdit}
+                    style={{
+                      ...billLinePriceModeSelectSt,
+                      cursor: canEdit ? 'pointer' : 'not-allowed',
+                      opacity: canEdit ? 1 : 0.65,
+                    }}
+                  >
+                    <option value="inc_tax">Price are inc.tax</option>
+                    <option value="ex_tax">Price are ex.tax</option>
+                  </select>
+                  <ChevronDown size={8} color="#616161" strokeWidth={2.5} style={{ flexShrink: 0 }} aria-hidden />
+                </div>
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={TH}>Description*</th>
-                    <th style={TH}>Account*</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Qty*</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Price</th>
-                    <th style={TH}>Tax rate</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Discount</th>
-                    <th style={{ ...TH, textAlign: 'right' }}>Total</th>
-                    <th style={{ ...TH, width: 36, borderRight: 'none' }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l, idx) => (
-                    <tr key={idx}>
-                      <td style={TD}>
-                        <div style={{ position: 'relative' }}>
-                          <div style={{ ...inputSt, height: 'auto', minHeight: 30, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, padding: '3px 6px' }}>
-                            {l.selected_products.map((p) => (
-                              <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#ecfeff', border: '1px solid #a5f3fc', color: '#0f766e', borderRadius: 999, padding: '1px 6px', fontSize: 11.5 }}>
-                                {(p.code ? `${p.code} - ` : '') + p.name}
-                                {canEdit && (
-                                  <button
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => setLine(idx, { selected_products: l.selected_products.filter((x) => x.id !== p.id) })}
-                                    style={{ border: 'none', background: 'transparent', color: '#0f766e', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}
-                                  >
-                                    x
-                                  </button>
-                                )}
-                              </span>
-                            ))}
-                            <input
-                              value={l.description_text}
-                              onChange={(e) => {
-                                setLine(idx, { description_text: e.target.value });
-                                setProductSearch((prev) => ({ ...prev, [idx]: e.target.value }));
-                              }}
-                              onFocus={() => setOpenProductLine(idx)}
-                              onBlur={() => setTimeout(() => setOpenProductLine((cur) => (cur === idx ? null : cur)), 120)}
+              <div style={{ overflowX: 'auto', backgroundColor: '#fff', paddingLeft: BILL_LINE_H_PAD, paddingRight: BILL_LINE_H_PAD, boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div role="row" style={billLineTheadTrSt}>
+                      <div role="columnheader" style={billLineThDesc}>Description*</div>
+                      <div role="columnheader" style={billLineThAcct}>Account*</div>
+                      <div role="columnheader" style={billLineThQty}>Qty*</div>
+                      <div role="columnheader" style={billLineThPrice}>Price</div>
+                      <div role="columnheader" style={billLineThTax}>Tax rate</div>
+                      <div role="columnheader" style={billLineThDisc}>Discount</div>
+                      <div role="columnheader" style={billLineThTotal}>Total</div>
+                    </div>
+                    <div style={{ width: 72, flexShrink: 0 }} aria-hidden />
+                  </div>
+                  {lines.map((l, idx) => {
+                    const lineTotalStr = (() => {
+                      const qty = Number(l.quantity) || 0;
+                      const price = Number(l.unit_price) || 0;
+                      const disc = Number(l.discount_percent) || 0;
+                      const base = qty * price;
+                      const afterDisc = base - (base * disc / 100);
+                      const rate = Number(taxRates.find((t) => t.id === l.tax_rate)?.rate ?? 0);
+                      const tax = afterDisc * rate / 100;
+                      const lineTotal = priceMode === 'inc_tax' ? afterDisc : afterDisc + tax;
+                      return fmt(String(lineTotal));
+                    })();
+                    return (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid #f0f4ef' }}>
+                        <div role="row" style={billLineTbodyTrSt}>
+                          <div role="cell" style={{ position: 'relative', flex: '0 0 174px', width: 174 }}>
+                            <div style={billLineDescShell}>
+                              {l.selected_products.map((p) => (
+                                <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, backgroundColor: '#ecfeff', border: '1px solid #a5f3fc', color: '#0f766e', borderRadius: 999, padding: '1px 6px', fontSize: 11.5 }}>
+                                  {(p.code ? `${p.code} - ` : '') + p.name}
+                                  {canEdit && (
+                                    <button
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => setLine(idx, { selected_products: l.selected_products.filter((x) => x.id !== p.id) })}
+                                      style={{ border: 'none', background: 'transparent', color: '#0f766e', cursor: 'pointer', fontSize: 12, lineHeight: 1, padding: 0 }}
+                                    >
+                                      x
+                                    </button>
+                                  )}
+                                </span>
+                              ))}
+                              <input
+                                className="bill-line-ph"
+                                value={l.description_text}
+                                onChange={(e) => {
+                                  setLine(idx, { description_text: e.target.value });
+                                  setProductSearch((prev) => ({ ...prev, [idx]: e.target.value }));
+                                }}
+                                onFocus={() => setOpenProductLine(idx)}
+                                onBlur={() => setTimeout(() => setOpenProductLine((cur) => (cur === idx ? null : cur)), 120)}
+                                disabled={!canEdit}
+                                style={{ ...billLineInputBare, minWidth: 48, flex: 1 }}
+                                placeholder="Description or search item"
+                              />
+                            </div>
+                            {canEdit && openProductLine === idx && (
+                              <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, width: 280, zIndex: 50, backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.08)', maxHeight: 180, overflowY: 'auto' }}>
+                                {products
+                                  .filter((p) => !l.selected_products.some((sp) => sp.id === p.id))
+                                  .filter((p) => {
+                                    const q = (productSearch[idx] ?? '').trim().toLowerCase();
+                                    if (!q) return true;
+                                    return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+                                  })
+                                  .slice(0, 20)
+                                  .map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => {
+                                        setLine(idx, { selected_products: [...l.selected_products, { id: p.id, name: p.name, code: p.code }] });
+                                        setOpenProductLine(idx);
+                                      }}
+                                      style={{ width: '100%', textAlign: 'left', border: 'none', backgroundColor: '#fff', padding: '7px 10px', fontSize: 12.5, color: '#374151', cursor: 'pointer' }}
+                                    >
+                                      {p.code ? `${p.code} - ` : ''}{p.name}
+                                    </button>
+                                  ))}
+                                {products.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12, color: '#9ca3af' }}>No products found.</div>}
+                              </div>
+                            )}
+                          </div>
+                          <div role="cell" style={billLineSelectShell}>
+                            <select
+                              className="bill-line-ph"
+                              value={l.account}
+                              onChange={(e) => setLine(idx, { account: e.target.value })}
                               disabled={!canEdit}
-                              style={{ border: 'none', outline: 'none', fontSize: 12.5, minWidth: 120, flex: 1, fontFamily: "'Heebo', sans-serif", backgroundColor: 'transparent' }}
-                              placeholder="Description"
+                              style={billLineSelectBare}
+                            >
+                              <option value="">required</option>
+                              {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+                            </select>
+                            <ChevronDown size={12} style={{ flexShrink: 0, color: '#979797', pointerEvents: 'none' }} aria-hidden />
+                          </div>
+                          <div role="cell" style={billLineQtyShell}>
+                            <input
+                              className="bill-line-ph"
+                              type="number"
+                              step="0.01"
+                              value={l.quantity}
+                              onChange={(e) => setLine(idx, { quantity: e.target.value })}
+                              disabled={!canEdit}
+                              style={{ ...billLineInputBare, textAlign: 'right' }}
+                              placeholder="1"
                             />
                           </div>
-                          {canEdit && openProductLine === idx && (
-                            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50, backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.08)', maxHeight: 180, overflowY: 'auto' }}>
-                              {products
-                                .filter((p) => !l.selected_products.some((sp) => sp.id === p.id))
-                                .filter((p) => {
-                                  const q = (productSearch[idx] ?? '').trim().toLowerCase();
-                                  if (!q) return true;
-                                  return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
-                                })
-                                .slice(0, 20)
-                                .map((p) => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => {
-                                      setLine(idx, { selected_products: [...l.selected_products, { id: p.id, name: p.name, code: p.code }] });
-                                      setOpenProductLine(idx);
-                                    }}
-                                    style={{ width: '100%', textAlign: 'left', border: 'none', backgroundColor: '#fff', padding: '7px 10px', fontSize: 12.5, color: '#374151', cursor: 'pointer' }}
-                                  >
-                                    {p.code ? `${p.code} - ` : ''}{p.name}
-                                  </button>
-                                ))}
-                              {products.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12, color: '#9ca3af' }}>No products found.</div>}
-                            </div>
+                          <div role="cell" style={billLinePriceShell}>
+                            <input
+                              className="bill-line-ph"
+                              type="number"
+                              step="0.01"
+                              value={l.unit_price}
+                              onChange={(e) => setLine(idx, { unit_price: e.target.value })}
+                              disabled={!canEdit}
+                              style={{ ...billLineInputBare, textAlign: 'right' }}
+                              placeholder="required"
+                            />
+                          </div>
+                          <div role="cell" style={billLineSelectShell}>
+                            <select
+                              className="bill-line-ph"
+                              value={l.tax_rate}
+                              onChange={(e) => setLine(idx, { tax_rate: e.target.value })}
+                              disabled={!canEdit}
+                              style={billLineSelectBare}
+                            >
+                              <option value="">required</option>
+                              {taxRates.filter((t) => t.tax_type === 'purchases').map((t) => (
+                                <option key={t.id} value={t.id}>{t.name} ({fmt(t.rate)}%)</option>
+                              ))}
+                            </select>
+                            <ChevronDown size={12} style={{ flexShrink: 0, color: '#979797', pointerEvents: 'none' }} aria-hidden />
+                          </div>
+                          <div role="cell" style={billLineDiscShell}>
+                            <input
+                              className="bill-line-ph"
+                              type="number"
+                              step="0.01"
+                              value={l.discount_percent}
+                              onChange={(e) => setLine(idx, { discount_percent: e.target.value })}
+                              disabled={!canEdit}
+                              style={{ ...billLineInputBare, flex: 1, minWidth: 0, textAlign: 'right' }}
+                            />
+                            <span style={{ color: '#010101', fontFamily: "'Heebo', sans-serif", fontSize: 12, lineHeight: '18px', flexShrink: 0 }}>%</span>
+                          </div>
+                          <div
+                            role="cell"
+                            style={{
+                              ...billLineTotalShell,
+                              fontVariantNumeric: 'tabular-nums',
+                              color: '#010101',
+                              fontWeight: 400,
+                              fontFamily: "'Heebo', sans-serif",
+                              fontSize: 12,
+                              lineHeight: '18px',
+                              letterSpacing: '0.03em',
+                            }}
+                          >
+                            {lineTotalStr}
+                          </div>
+                        </div>
+                        <div style={{ width: 72, flexShrink: 0, display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                          {canEdit && (
+                            <>
+                              <button onClick={() => clearLine(idx)} type="button" style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #e5e7eb', backgroundColor: '#fff', color: '#666', cursor: 'pointer', fontSize: 11 }}>↺</button>
+                              <button onClick={() => removeLine(idx)} type="button" style={{ width: 26, height: 26, borderRadius: 6, border: 'none', backgroundColor: '#fff5f5', color: '#dc2626', cursor: 'pointer' }}>
+                                <Trash2 size={12} />
+                              </button>
+                            </>
                           )}
                         </div>
-                      </td>
-                      <td style={TD}>
-                        <select value={l.account} onChange={(e) => setLine(idx, { account: e.target.value })} disabled={!canEdit} style={{ ...inputSt, height: 30 }}>
-                          <option value="">Required</option>
-                          {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
-                        </select>
-                      </td>
-                      <td style={{ ...TD, textAlign: 'right' }}><input type="number" step="0.01" value={l.quantity} onChange={(e) => setLine(idx, { quantity: e.target.value })} disabled={!canEdit} style={{ ...inputSt, height: 30, textAlign: 'right' }} /></td>
-                      <td style={{ ...TD, textAlign: 'right' }}><input type="number" step="0.01" value={l.unit_price} onChange={(e) => setLine(idx, { unit_price: e.target.value })} disabled={!canEdit} style={{ ...inputSt, height: 30, textAlign: 'right' }} placeholder="Required" /></td>
-                      <td style={TD}>
-                        <select value={l.tax_rate} onChange={(e) => setLine(idx, { tax_rate: e.target.value })} disabled={!canEdit} style={{ ...inputSt, height: 30 }}>
-                          <option value="">Required</option>
-                          {taxRates.filter((t) => t.tax_type === 'purchases').map((t) => (
-                            <option key={t.id} value={t.id}>{t.name} ({fmt(t.rate)}%)</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td style={{ ...TD, textAlign: 'right' }}><input type="number" step="0.01" value={l.discount_percent} onChange={(e) => setLine(idx, { discount_percent: e.target.value })} disabled={!canEdit} style={{ ...inputSt, height: 30, textAlign: 'right' }} /></td>
-                      <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                        {(() => {
-                          const qty = Number(l.quantity) || 0;
-                          const price = Number(l.unit_price) || 0;
-                          const disc = Number(l.discount_percent) || 0;
-                          const base = qty * price;
-                          const afterDisc = base - (base * disc / 100);
-                          const rate = Number(taxRates.find((t) => t.id === l.tax_rate)?.rate ?? 0);
-                          const tax = afterDisc * rate / 100;
-                          const lineTotal = priceMode === 'inc_tax' ? afterDisc : afterDisc + tax;
-                          return fmt(String(lineTotal));
-                        })()}
-                      </td>
-                      <td style={{ ...TD, borderRight: 'none' }}>
-                        {canEdit && (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => clearLine(idx)} type="button" style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #e5e7eb', backgroundColor: '#fff', color: '#666', cursor: 'pointer', fontSize: 11 }}>↺</button>
-                            <button onClick={() => removeLine(idx)} type="button" style={{ width: 26, height: 26, borderRadius: 6, border: 'none', backgroundColor: '#fff5f5', color: '#dc2626', cursor: 'pointer' }}>
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderTop: '1px solid #f5f5f5' }}>
-                <div style={{ display: 'flex', gap: 8 }}>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: `8px ${BILL_LINE_H_PAD}px`, borderTop: '1px solid #f5f5f5', gap: 16, boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   {canEdit && (
-                    <button onClick={addLine} type="button" style={{ height: 30, paddingInline: 12, borderRadius: 7, border: '1px solid #bbf7e8', backgroundColor: '#f0fdf9', color: '#0f766e', cursor: 'pointer', fontSize: 12.5 }}>
-                      + Add line
-                    </button>
+                    <>
+                      <button
+                        onClick={addLine}
+                        type="button"
+                        style={billLineFooterAddBtnSt}
+                      >
+                        <Plus size={8} strokeWidth={2.25} aria-hidden />
+                        <span>Add line</span>
+                      </button>
+                      <button
+                        onClick={resetLinesToDefault}
+                        type="button"
+                        style={billLineFooterClearBtnSt}
+                      >
+                        <RotateCcw size={10} strokeWidth={2.25} aria-hidden />
+                        <span>Clear line</span>
+                      </button>
+                    </>
                   )}
                 </div>
-                <div style={{ textAlign: 'right', fontSize: 12.5, color: '#555', lineHeight: 1.7 }}>
-                  <div>Subtotal <span style={{ marginLeft: 10, minWidth: 80, display: 'inline-block', textAlign: 'right' }}>{fmt(String(subtotal))}</span></div>
-                  <div>Total VAT <span style={{ marginLeft: 10, minWidth: 80, display: 'inline-block', textAlign: 'right' }}>{fmt(String(totalVat))}</span></div>
-                  <div style={{ marginTop: 2, fontSize: 15, fontWeight: 700, color: '#111827' }}>Total <span style={{ marginLeft: 10 }}>SAR {fmt(String(total))}</span></div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+                  <div style={billLineTotalsSubtotalRowSt}>
+                    <span>Subtotal</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmt(String(subtotal))}</span>
+                  </div>
+                  <div style={billLineTotalsVatRowSt}>
+                    <span>Total VAT</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{fmt(String(totalVat))}</span>
+                  </div>
+                  <div style={billLineTotalsHrSt} role="separator" />
+                  <div style={billLineTotalsGrandRowSt}>
+                    <span>Total</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>SAR {fmt(String(total))}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Note */}
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, overflow: 'hidden' }}>
-              <div style={{ backgroundColor: '#f3f4f6', padding: '8px 12px', borderBottom: '1px solid #edf2f7', fontSize: 12.5, fontWeight: 600, color: '#4b5563' }}>
+              <div style={{ ...sectionHeaderBarFullSt, borderBottom: '1px solid #edf2f7' }}>
                 Note
               </div>
               <div style={{ padding: 12 }}>
