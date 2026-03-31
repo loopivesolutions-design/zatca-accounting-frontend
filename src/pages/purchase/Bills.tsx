@@ -935,7 +935,7 @@ function BillsEditor() {
 
       setBillId(data.id);
       setStatus(data.status);
-      if (navigateAfterCreate && (!id || id === 'add')) nav(`/purchase/bills/${data.id}`, { replace: true });
+      if (navigateAfterCreate && (!id || id === 'add')) nav('/purchase/bills', { replace: true });
       return data.id;
     } catch (err) {
       setError(parseApiError(err));
@@ -968,7 +968,7 @@ function BillsEditor() {
         { headers: { 'Idempotency-Key': billIdempotencyKey() } },
       );
       setStatus(data.status);
-      if (!id || id === 'add') nav(`/purchase/bills/${targetId}`, { replace: true });
+      nav('/purchase/bills', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
