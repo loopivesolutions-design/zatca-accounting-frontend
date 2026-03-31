@@ -586,9 +586,7 @@ function SuppliersModal({
                       value={trn}
                       onChange={(e) => setTrn(digitsOnly(e.target.value))}
                       style={inputSt}
-                      required
                       inputMode="numeric"
-                      pattern="\\d{15}"
                       maxLength={15}
                       placeholder="15 digits (starts and ends with 3)"
                     />
@@ -635,7 +633,7 @@ function SuppliersModal({
                   onChange={(e) => setLandId(digitsOnly(e.target.value))}
                   style={inputSt}
                   required
-                  placeholder="Empty"
+                  placeholder="Numbers only"
                   inputMode="numeric"
                   pattern="[0-9]*"
                 />
