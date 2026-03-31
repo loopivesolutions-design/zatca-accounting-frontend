@@ -772,6 +772,7 @@ function BillsEditor() {
   const [note, setNote] = useState('');
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentName, setAttachmentName] = useState('');
+  const [attachmentPreview, setAttachmentPreview] = useState<string>('');
   const [mergeLineItem, setMergeLineItem] = useState(true);
   const [priceMode, setPriceMode] = useState<'inc_tax' | 'ex_tax'>('inc_tax');
   const [lines, setLines] = useState<BillLine[]>([
@@ -793,7 +794,11 @@ function BillsEditor() {
 
   const canEdit = status === 'draft';
 
-  const subtotal = useMemo(() => lines.reduce((acc, l) => acc + ((Number(l.quantity) || 0) * (Number(l.unit_price) || 0)), 0), [lines]);
+  const subtotal = useMemo(() => lines.reduce((acc, l) => {
+    const base = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
+    const disc = Number(l.discount_percent) || 0;
+    return acc + (base - (base * disc / 100));
+  }, 0), [lines]);
   const totalVat = useMemo(() => lines.reduce((acc, l) => {
     const lineBase = ((Number(l.quantity) || 0) * (Number(l.unit_price) || 0));
     const disc = Number(l.discount_percent) || 0;
@@ -845,6 +850,7 @@ function BillsEditor() {
       setDueDate(data.due_date ?? '');
       setNote(data.note ?? '');
       setAttachmentName(data.attachment ?? '');
+      setAttachmentPreview(data.attachment ?? '');
       setPostPayableAccount('');
       setPostVatAccount('');
       setPostingDate('');
@@ -999,14 +1005,14 @@ function BillsEditor() {
 
   const editorInputNoIconSt: React.CSSProperties = {
     boxSizing: 'border-box',
-    width: 394,
-    height: 32,
+    width: '100%',
+    height: 36,
     border: '0.8px solid #979797',
     borderRadius: 5,
-    padding: '11px 18px',
+    padding: '0 18px',
     fontFamily: "'Heebo', sans-serif",
     fontSize: 13,
-    lineHeight: '19px',
+    lineHeight: '36px',
     letterSpacing: '0.03em',
     color: '#1a1a1a',
     outline: 'none',
@@ -1015,14 +1021,14 @@ function BillsEditor() {
 
   const editorInputWithIconSt: React.CSSProperties = {
     boxSizing: 'border-box',
-    width: 393,
-    height: 32,
+    width: '100%',
+    height: 36,
     border: '0.8px solid #979797',
     borderRadius: 5,
-    padding: '9px 18px',
+    padding: '0 18px',
     fontFamily: "'Heebo', sans-serif",
     fontSize: 13,
-    lineHeight: '19px',
+    lineHeight: '36px',
     letterSpacing: '0.03em',
     color: '#1a1a1a',
     outline: 'none',
@@ -1088,7 +1094,7 @@ function BillsEditor() {
               <div style={{ ...sectionHeaderBarFullSt, borderBottom: '1px solid #edf2f7' }}>
                 Bill Information
               </div>
-              <div style={{ padding: '30px 40px', width: 600, minHeight: 264, display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 25, columnGap: 14, alignItems: 'center' }}>
+              <div style={{ padding: '30px 40px', width: '100%', boxSizing: 'border-box', minHeight: 264, display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 25, columnGap: 14, alignItems: 'center' }}>
                 <span style={editorLabelSt}>Bill Number*</span>
                 <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} disabled={!canEdit} style={{ ...editorInputNoIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Empty" />
 
@@ -1453,17 +1459,29 @@ function BillsEditor() {
                 <br />
                 Max file size: 15MB
               </span>
-              <input type="file" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
+              <input type="file" accept="image/*,.pdf" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 setAttachmentFile(f);
                 setAttachmentName(f?.name ?? '');
+                if (attachmentPreview && attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
+                setAttachmentPreview(f ? URL.createObjectURL(f) : '');
               }} />
             </label>
-            {attachmentName && (
-              <div style={{ marginTop: 10, fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>
-                Attachment: {attachmentName}
+            {attachmentPreview && (attachmentFile?.type.startsWith('image/') || (!attachmentFile && attachmentPreview.match(/\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i))) ? (
+              <div style={{ marginTop: 10 }}>
+                <img
+                  src={attachmentPreview}
+                  alt="Attachment preview"
+                  style={{ width: '100%', borderRadius: 8, border: '1px solid #e5e7eb', objectFit: 'contain', maxHeight: 260 }}
+                />
+                <div style={{ marginTop: 6, fontSize: 11.5, color: '#9ca3af', wordBreak: 'break-all' }}>{attachmentName}</div>
               </div>
-            )}
+            ) : attachmentName ? (
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: '#f3f4f6', borderRadius: 8, padding: '8px 12px' }}>
+                <UploadCloud size={14} style={{ color: '#6b7280', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>{attachmentName}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
