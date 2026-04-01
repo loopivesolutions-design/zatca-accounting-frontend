@@ -21,6 +21,8 @@ interface Invitation {
 interface User {
   id: string;
   name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   role: string | null;
   role_name: string | null;
@@ -217,18 +219,20 @@ function AddUserModal({ roles, onClose, onSent }: { roles: Role[]; onClose: () =
 
 // ── Edit User Modal ───────────────────────────────────────────────────────────
 function EditUserModal({ user, roles, onClose, onUpdated }: { user: User; roles: Role[]; onClose: () => void; onUpdated: (updated: User) => void }) {
-  const [name, setName]   = useState(user.name ?? '');
-  const [email, setEmail] = useState(user.email ?? '');
-  const [role, setRole]   = useState(user.role ?? '');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [firstName, setFirstName] = useState(user.first_name ?? '');
+  const [lastName, setLastName]   = useState(user.last_name ?? '');
+  const [email, setEmail]         = useState(user.email ?? '');
+  const [role, setRole]           = useState(user.role ?? '');
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
       const { data } = await api.patch<User>(`/api/v1/user/management/users/${user.id}/`, {
-        name: name.trim(),
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         email: email.trim(),
         role: role || null,
       });
@@ -261,12 +265,20 @@ function EditUserModal({ user, roles, onClose, onUpdated }: { user: User; roles:
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Name */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: '#555' }}>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required style={inputSt}
-              onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
-              onBlur={(e) => (e.target.style.borderColor = '#ddd')} />
+          {/* First Name + Last Name */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#555' }}>First Name</label>
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} required style={inputSt}
+                onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
+                onBlur={(e) => (e.target.style.borderColor = '#ddd')} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#555' }}>Last Name</label>
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} style={inputSt}
+                onFocus={(e) => (e.target.style.borderColor = '#35C0A3')}
+                onBlur={(e) => (e.target.style.borderColor = '#ddd')} />
+            </div>
           </div>
 
           {/* Email */}
