@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { X, Plus, Trash2, Save, Search, ArrowUpDown, MoreVertical, RefreshCw, Pencil } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { X, Plus, Trash2, Save, Search, ArrowUpDown, MoreVertical, RefreshCw, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
 import api from '../../api/axios';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -385,6 +385,22 @@ export default function UserRoleManagement() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [deletingInvId, setDeletingInvId] = useState<string | null>(null);
 
+  // Sort / More dropdown state — users tab
+  type UserSortField = 'name' | 'email' | 'role_name' | 'last_login';
+  const [userSort, setUserSort]       = useState<{ field: UserSortField; dir: 'asc' | 'desc' }>({ field: 'name', dir: 'asc' });
+  const [userSortOpen, setUserSortOpen] = useState(false);
+  const [userMoreOpen, setUserMoreOpen] = useState(false);
+  const userSortRef = useRef<HTMLDivElement>(null);
+  const userMoreRef = useRef<HTMLDivElement>(null);
+
+  // Sort / More dropdown state — invitations tab
+  type InvSortField = 'name' | 'email' | 'role_name' | 'status' | 'created_at';
+  const [invSort, setInvSort]         = useState<{ field: InvSortField; dir: 'asc' | 'desc' }>({ field: 'created_at', dir: 'desc' });
+  const [invSortOpen, setInvSortOpen] = useState(false);
+  const [invMoreOpen, setInvMoreOpen] = useState(false);
+  const invSortRef = useRef<HTMLDivElement>(null);
+  const invMoreRef = useRef<HTMLDivElement>(null);
+
   // Roles state
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
@@ -488,6 +504,18 @@ export default function UserRoleManagement() {
   useEffect(() => { fetchUsers(); fetchRoles(); fetchInvitations(); }, []);
   useEffect(() => { if (selectedRoleId) fetchPermissions(selectedRoleId); }, [selectedRoleId]);
 
+  // Close sort/more dropdowns on outside click
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (userSortRef.current && !userSortRef.current.contains(e.target as Node)) setUserSortOpen(false);
+      if (userMoreRef.current && !userMoreRef.current.contains(e.target as Node)) setUserMoreOpen(false);
+      if (invSortRef.current  && !invSortRef.current.contains(e.target as Node))  setInvSortOpen(false);
+      if (invMoreRef.current  && !invMoreRef.current.contains(e.target as Node))   setInvMoreOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
   function togglePerm(moduleKey: string, permKey: PermKey) {
     setPermissions((prev) => prev.map((p) => p.module === moduleKey ? { ...p, [permKey]: !p[permKey] } : p));
   }
@@ -525,17 +553,35 @@ export default function UserRoleManagement() {
     finally { setDeletingId(null); }
   }
 
-  const filteredInvitations = invitations.filter((inv) => {
-    const full = `${inv.first_name} ${inv.last_name}`.toLowerCase();
-    const s = invSearch.toLowerCase();
-    return full.includes(s) || inv.email.toLowerCase().includes(s);
-  });
+  const filteredUsers = [...users]
+    .filter(
+      (u) =>
+        u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase()),
+    )
+    .sort((a, b) => {
+      const dir = userSort.dir === 'asc' ? 1 : -1;
+      const av = (a[userSort.field] ?? '').toString().toLowerCase();
+      const bv = (b[userSort.field] ?? '').toString().toLowerCase();
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const filteredInvitations = [...invitations]
+    .filter((inv) => {
+      const full = `${inv.first_name} ${inv.last_name}`.toLowerCase();
+      const s = invSearch.toLowerCase();
+      return full.includes(s) || inv.email.toLowerCase().includes(s);
+    })
+    .sort((a, b) => {
+      const dir = invSort.dir === 'asc' ? 1 : -1;
+      const getVal = (x: Invitation): string => {
+        if (invSort.field === 'name') return `${x.first_name} ${x.last_name}`.trim().toLowerCase();
+        return (x[invSort.field as keyof Invitation] ?? '').toString().toLowerCase();
+      };
+      const av = getVal(a);
+      const bv = getVal(b);
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
 
@@ -592,12 +638,54 @@ export default function UserRoleManagement() {
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 12px', fontSize: 13, color: '#666', cursor: 'pointer' }}>
-                <ArrowUpDown size={13} /> Sort
-              </button>
-              <button style={{ background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center' }}>
-                <MoreVertical size={14} />
-              </button>
+              {/* Sort dropdown */}
+              <div ref={userSortRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setUserSortOpen((o) => !o); setUserMoreOpen(false); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 12px', fontSize: 13, color: userSortOpen ? '#35C0A3' : '#666', cursor: 'pointer', borderColor: userSortOpen ? '#35C0A3' : '#e8e8e8' }}
+                >
+                  <ArrowUpDown size={13} /> Sort
+                </button>
+                {userSortOpen && (
+                  <div style={{ position: 'absolute', top: 36, right: 0, zIndex: 30, backgroundColor: '#fff', border: '1px solid #e8e8e8', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.1)', minWidth: 160, overflow: 'hidden' }}>
+                    {([['name', 'Name'], ['email', 'Email'], ['role_name', 'Role'], ['last_login', 'Last Login']] as [UserSortField, string][]).map(([field, label]) => {
+                      const active = userSort.field === field;
+                      return (
+                        <button
+                          key={field}
+                          onClick={() => {
+                            setUserSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }));
+                            setUserSortOpen(false);
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 14px', background: 'none', border: 'none', fontSize: 13, color: active ? '#35C0A3' : '#333', fontWeight: active ? 500 : 400, cursor: 'pointer', fontFamily: "'Heebo', sans-serif" }}
+                        >
+                          <span>{label}</span>
+                          {active && (userSort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {/* More dropdown */}
+              <div ref={userMoreRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setUserMoreOpen((o) => !o); setUserSortOpen(false); }}
+                  style={{ background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', color: userMoreOpen ? '#35C0A3' : '#666', display: 'flex', alignItems: 'center', borderColor: userMoreOpen ? '#35C0A3' : '#e8e8e8' }}
+                >
+                  <MoreVertical size={14} />
+                </button>
+                {userMoreOpen && (
+                  <div style={{ position: 'absolute', top: 36, right: 0, zIndex: 30, backgroundColor: '#fff', border: '1px solid #e8e8e8', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.1)', minWidth: 150, overflow: 'hidden' }}>
+                    <button
+                      onClick={() => { fetchUsers(); setUserMoreOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', background: 'none', border: 'none', fontSize: 13, color: '#333', cursor: 'pointer', fontFamily: "'Heebo', sans-serif" }}
+                    >
+                      <RefreshCw size={13} /> Refresh
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -750,12 +838,54 @@ export default function UserRoleManagement() {
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 12px', fontSize: 13, color: '#666', cursor: 'pointer' }}>
-                <ArrowUpDown size={13} /> Sort
-              </button>
-              <button style={{ background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', color: '#666', display: 'flex', alignItems: 'center' }}>
-                <MoreVertical size={14} />
-              </button>
+              {/* Sort dropdown */}
+              <div ref={invSortRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setInvSortOpen((o) => !o); setInvMoreOpen(false); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 12px', fontSize: 13, color: invSortOpen ? '#35C0A3' : '#666', cursor: 'pointer', borderColor: invSortOpen ? '#35C0A3' : '#e8e8e8' }}
+                >
+                  <ArrowUpDown size={13} /> Sort
+                </button>
+                {invSortOpen && (
+                  <div style={{ position: 'absolute', top: 36, right: 0, zIndex: 30, backgroundColor: '#fff', border: '1px solid #e8e8e8', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.1)', minWidth: 160, overflow: 'hidden' }}>
+                    {([['name', 'Name'], ['email', 'Email'], ['role_name', 'Role'], ['status', 'Status'], ['created_at', 'Send Date']] as [InvSortField, string][]).map(([field, label]) => {
+                      const active = invSort.field === field;
+                      return (
+                        <button
+                          key={field}
+                          onClick={() => {
+                            setInvSort((prev) => ({ field, dir: prev.field === field && prev.dir === 'asc' ? 'desc' : 'asc' }));
+                            setInvSortOpen(false);
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '9px 14px', background: 'none', border: 'none', fontSize: 13, color: active ? '#35C0A3' : '#333', fontWeight: active ? 500 : 400, cursor: 'pointer', fontFamily: "'Heebo', sans-serif" }}
+                        >
+                          <span>{label}</span>
+                          {active && (invSort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {/* More dropdown */}
+              <div ref={invMoreRef} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => { setInvMoreOpen((o) => !o); setInvSortOpen(false); }}
+                  style={{ background: 'none', border: '1px solid #e8e8e8', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', color: invMoreOpen ? '#35C0A3' : '#666', display: 'flex', alignItems: 'center', borderColor: invMoreOpen ? '#35C0A3' : '#e8e8e8' }}
+                >
+                  <MoreVertical size={14} />
+                </button>
+                {invMoreOpen && (
+                  <div style={{ position: 'absolute', top: 36, right: 0, zIndex: 30, backgroundColor: '#fff', border: '1px solid #e8e8e8', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.1)', minWidth: 150, overflow: 'hidden' }}>
+                    <button
+                      onClick={() => { fetchInvitations(); setInvMoreOpen(false); }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', background: 'none', border: 'none', fontSize: 13, color: '#333', cursor: 'pointer', fontFamily: "'Heebo', sans-serif" }}
+                    >
+                      <RefreshCw size={13} /> Refresh
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -826,7 +956,7 @@ export default function UserRoleManagement() {
       )}
 
       {/* Modals */}
-      {showAddUser && <AddUserModal roles={roles} onClose={() => setShowAddUser(false)} onSent={fetchUsers} />}
+      {showAddUser && <AddUserModal roles={roles} onClose={() => setShowAddUser(false)} onSent={() => { fetchInvitations(); setActiveTab('invitations'); }} />}
       {editingUser && (
         <EditUserModal
           user={editingUser}
