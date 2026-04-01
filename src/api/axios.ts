@@ -63,6 +63,13 @@ api.interceptors.request.use(async (config) => {
   // Skip the refresh endpoint itself to avoid loops
   if (config.url?.includes('/token/refresh/')) return config;
 
+  // When sending FormData let the browser set the correct multipart Content-Type
+  // (with boundary). Deleting the JSON default prevents axios from serializing
+  // the FormData as "{}" and sending it with application/json.
+  if (config.data instanceof FormData) {
+    delete (config.headers as Record<string, unknown>)['Content-Type'];
+  }
+
   let token = localStorage.getItem('auth_token');
 
   if (token && isExpiredOrExpiringSoon(token)) {

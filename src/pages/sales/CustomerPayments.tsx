@@ -384,8 +384,8 @@ function PaymentEditor() {
             headers: { 'Idempotency-Key': customerPaymentIdempotencyKey() },
           });
 
-      if (!id || id === 'add') nav(`/sales/customer-payments/${data.id}`, { replace: true });
       setPaymentId(data.id);
+      nav('/sales/customer-payments', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {

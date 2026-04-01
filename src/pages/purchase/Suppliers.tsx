@@ -192,26 +192,65 @@ function CustomSelect({
   placeholder?: string;
   disabled?: boolean;
 }) {
+  const MAX_H = 220;
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (!rootRef.current) return;
       if (!rootRef.current.contains(e.target as Node)) setOpen(false);
     }
+    function onScroll(e: Event) {
+      // Ignore scrolls that originate inside the dropdown panel itself
+      if (dropRef.current && dropRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    }
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, []);
+
+  function handleToggle() {
+    if (disabled) return;
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const flipUp = spaceBelow < MAX_H + 10 && rect.top > MAX_H + 10;
+      setDropStyle({
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        ...(flipUp
+          ? { bottom: window.innerHeight - rect.top + 6, top: 'auto' }
+          : { top: rect.bottom + 6 }),
+        zIndex: 9999,
+        backgroundColor: '#FFFFFF',
+        border: '0.2px solid #000000',
+        borderRadius: 5,
+        boxShadow: '0px 2px 12px -2px rgba(0,0,0,0.15)',
+        maxHeight: MAX_H,
+        overflowY: 'auto',
+      });
+    }
+    setOpen((p) => !p);
+  }
 
   const selected = options.find((o) => o.value === value);
 
   return (
     <div ref={rootRef} style={{ position: 'relative', width: '100%' }}>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => { if (!disabled) setOpen((p) => !p); }}
+        onClick={handleToggle}
         disabled={disabled}
         style={{
           ...inputSt,
@@ -229,22 +268,7 @@ function CustomSelect({
         <ChevronDown size={14} style={{ color: '#9ca3af', marginLeft: 12, flexShrink: 0 }} />
       </button>
       {open && !disabled ? (
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            right: 0,
-            backgroundColor: '#FFFFFF',
-            border: '0.2px solid #000000',
-            borderRadius: 5,
-            boxShadow: '0px 2px 12px -2px rgba(0, 0, 0, 0.15)',
-            zIndex: 30,
-            overflow: 'hidden',
-            maxHeight: 220,
-            overflowY: 'auto',
-          }}
-        >
+        <div ref={dropRef} style={dropStyle}>
           {options.map((opt) => {
             const isActive = opt.value === value;
             const isHovered = hovered === opt.value;
