@@ -92,9 +92,11 @@ function AddUserModal({ roles, onClose, onSent }: { roles: Role[]; onClose: () =
     setError('');
     setLoading(true);
     try {
-      await api.post('/api/v1/user/management/invitations/send/', {
-        users: valid.map((r) => ({ name: r.name.trim(), email: r.email.trim(), role: r.role || null })),
-      });
+      await api.post(
+        '/api/v1/user/management/invitations/send/',
+        { users: valid.map((r) => ({ name: r.name.trim(), email: r.email.trim(), role: r.role || null })) },
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+      );
       onSent();
       onClose();
     } catch {
