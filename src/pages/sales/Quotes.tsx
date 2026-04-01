@@ -417,7 +417,7 @@ function QuotesEditor() {
       setQuoteId(data.id);
       setStatus(data.status);
       setIssuer(data.issuer_details ?? null);
-      if (navigateAfterCreate && (!id || id === 'add')) nav(`/sales/quotes/${data.id}`, { replace: true });
+      if (navigateAfterCreate) nav('/sales/quotes', { replace: true });
       return data.id;
     } catch (err) {
       setError(parseApiError(err));
@@ -440,7 +440,7 @@ function QuotesEditor() {
       const { data } = await api.post<QuoteDetail>(`/api/v1/sales/quotes/${targetId}/send/`, {});
       setStatus(data.status);
       setIssuer(data.issuer_details ?? null);
-      if (!id || id === 'add') nav(`/sales/quotes/${targetId}`, { replace: true });
+      nav('/sales/quotes', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {

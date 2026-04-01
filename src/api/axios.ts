@@ -7,14 +7,26 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ── Request interceptor: attach access token ──────────────────────────────────
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
+// ── Token helpers ─────────────────────────────────────────────────────────────
 
-// ── Response interceptor: auto-refresh on 401 ────────────────────────────────
+/** Decode a JWT and return its `exp` Unix timestamp, or null on failure. */
+function getTokenExp(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof payload.exp === 'number' ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns true if the token is already expired or will expire within `bufferSec` seconds. */
+function isExpiredOrExpiringSoon(token: string, bufferSec = 90): boolean {
+  const exp = getTokenExp(token);
+  if (exp === null) return true;
+  return Date.now() / 1000 + bufferSec >= exp;
+}
+
+// ── Shared refresh state (prevents simultaneous refresh calls) ────────────────
 let isRefreshing = false;
 let pendingQueue: { resolve: (token: string) => void; reject: (err: unknown) => void }[] = [];
 
@@ -23,26 +35,73 @@ function processQueue(error: unknown, token: string | null) {
   pendingQueue = [];
 }
 
+async function doRefresh(): Promise<string> {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) throw new Error('NO_REFRESH_TOKEN');
+
+  const { data } = await axios.post(
+    `${BACKEND_URL}/api/v1/user/token/refresh/`,
+    { refresh: refreshToken },
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+
+  const newAccess: string = data.access;
+  localStorage.setItem('auth_token', newAccess);
+  if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
+  return newAccess;
+}
+
+function redirectToLogin() {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('auth_user');
+  window.location.href = '/';
+}
+
+// ── Request interceptor: attach token, proactively refresh if near expiry ─────
+api.interceptors.request.use(async (config) => {
+  // Skip the refresh endpoint itself to avoid loops
+  if (config.url?.includes('/token/refresh/')) return config;
+
+  let token = localStorage.getItem('auth_token');
+
+  if (token && isExpiredOrExpiringSoon(token)) {
+    if (isRefreshing) {
+      // Another request is already refreshing — wait for it
+      token = await new Promise<string>((resolve, reject) => {
+        pendingQueue.push({ resolve, reject });
+      });
+    } else {
+      isRefreshing = true;
+      try {
+        token = await doRefresh();
+        processQueue(null, token);
+      } catch (err) {
+        processQueue(err, null);
+        redirectToLogin();
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+  }
+
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// ── Response interceptor: fallback refresh on unexpected 401 ─────────────────
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Only attempt refresh on 401, and not on the refresh endpoint itself
     if (
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/token/refresh/')
     ) {
-      const refreshToken = localStorage.getItem('refresh_token');
-
-      if (!refreshToken) {
-        redirectToLogin();
-        return Promise.reject(error);
-      }
-
       if (isRefreshing) {
-        // Queue this request until refresh completes
         return new Promise((resolve, reject) => {
           pendingQueue.push({
             resolve: (token) => {
@@ -58,18 +117,9 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { data } = await axios.post(
-          `${BACKEND_URL}/api/v1/user/token/refresh/`,
-          { refresh: refreshToken },
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-
-        const newAccessToken = data.access;
-        localStorage.setItem('auth_token', newAccessToken);
-        if (data.refresh) localStorage.setItem('refresh_token', data.refresh);
-
-        processQueue(null, newAccessToken);
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        const newToken = await doRefresh();
+        processQueue(null, newToken);
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
@@ -81,14 +131,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
-
-function redirectToLogin() {
-  localStorage.removeItem('auth_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('auth_user');
-  window.location.href = '/';
-}
 
 export default api;

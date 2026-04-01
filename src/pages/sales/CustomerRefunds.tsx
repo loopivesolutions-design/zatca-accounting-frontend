@@ -350,8 +350,8 @@ function RefundEditor() {
             headers: { 'Idempotency-Key': customerRefundIdempotencyKey() },
           });
 
-      if (!id || id === 'add') nav(`/sales/customer-refunds/${data.id}`, { replace: true });
       setRefundId(data.id);
+      nav('/sales/customer-refunds', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {

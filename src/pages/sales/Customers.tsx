@@ -308,8 +308,16 @@ function CustomersModal({
                   ))}
                 </div>
 
-                <span style={labelSt}>TAX Registration Number*</span>
-                <input value={trn} onChange={(e) => setTrn(e.target.value)} style={inputSt} required />
+                <span style={labelSt}>
+                  TAX Registration Number{vatTreatment === 'vat_registered_ksa' ? '*' : ''}
+                </span>
+                <input
+                  value={trn}
+                  onChange={(e) => setTrn(e.target.value)}
+                  style={inputSt}
+                  required={vatTreatment === 'vat_registered_ksa'}
+                  placeholder={vatTreatment === 'vat_registered_ksa' ? '' : 'Optional'}
+                />
               </div>
             </div>
           </div>
