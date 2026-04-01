@@ -8,7 +8,7 @@ function billIdempotencyKey() {
   return crypto.randomUUID();
 }
 
-type BillStatus = 'draft' | 'posted';
+type BillStatus = 'draft' | 'posted' | 'partially_paid' | 'paid';
 type BillsTab = 'all' | 'to_complete' | 'to_authorize' | 'to_pay' | 'overdue' | 'paid';
 
 interface BillListRow {
@@ -444,15 +444,20 @@ const billLineSelectBare: React.CSSProperties = {
 };
 
 function statusPill(status: BillStatus) {
-  const posted = status === 'posted';
+  const config: Record<BillStatus, { bg: string; color: string; label: string }> = {
+    draft:           { bg: '#fef3c7', color: '#b45309', label: 'DRAFT' },
+    posted:          { bg: '#dbeafe', color: '#1d4ed8', label: 'POSTED' },
+    partially_paid:  { bg: '#fde68a', color: '#92400e', label: 'PARTIAL' },
+    paid:            { bg: '#dcfce7', color: '#16a34a', label: 'PAID' },
+  };
+  const { bg, color, label } = config[status] ?? config.draft;
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', height: 20, paddingInline: 8,
       borderRadius: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3,
-      backgroundColor: posted ? '#dcfce7' : '#fef3c7',
-      color: posted ? '#16a34a' : '#b45309',
+      backgroundColor: bg, color,
     }}>
-      {posted ? 'POSTED' : 'DRAFT'}
+      {label}
     </span>
   );
 }
@@ -574,12 +579,13 @@ function BillsList() {
     const balance = Number(row.balance) || Math.max(totalAmount - payments, 0);
     const isPaid = balance <= 0 || payments >= totalAmount;
 
+    const isEffectivelyPosted = ['posted', 'partially_paid', 'paid'].includes(row.status);
     if (t === 'all') return true;
     if (t === 'to_complete') return row.status === 'draft';
     if (t === 'to_authorize') return row.status === 'draft';
-    if (t === 'to_pay') return row.status === 'posted' && !isPaid && (!due || due >= today);
-    if (t === 'overdue') return row.status === 'posted' && !isPaid && !!due && due < today;
-    if (t === 'paid') return row.status === 'posted' && isPaid;
+    if (t === 'to_pay') return isEffectivelyPosted && !isPaid && (!due || due >= today);
+    if (t === 'overdue') return isEffectivelyPosted && !isPaid && !!due && due < today;
+    if (t === 'paid') return row.status === 'paid' || (isEffectivelyPosted && isPaid);
     return true;
   }
 
