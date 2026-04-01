@@ -343,10 +343,12 @@ function PaymentEditor() {
   async function save() {
     setError('');
 
-    if ((Number(amountPaid) || 0) <= 0) {
-      setError('Amount paid must be greater than 0.');
-      return;
-    }
+    if (!supplier) { setError('Supplier is required.'); return; }
+    if (!paidThrough) { setError('Paid through account is required.'); return; }
+    if (!paymentNumber.trim()) { setError('Payment number is required.'); return; }
+    if ((Number(amountPaid) || 0) <= 0) { setError('Amount paid must be greater than 0.'); return; }
+    if (!paymentDate) { setError('Payment date is required.'); return; }
+
     if (paymentType === 'bill_payment') {
       if (amountApplied > (Number(amountPaid) || 0)) {
         setError('Total allocations cannot exceed amount paid.');
@@ -364,7 +366,7 @@ function PaymentEditor() {
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        payment_number: paymentNumber,
+        payment_number: paymentNumber.trim(),
         supplier,
         paid_through: paidThrough,
         payment_type: paymentType,
@@ -378,14 +380,13 @@ function PaymentEditor() {
           .map(([bill, amount]) => ({ bill, amount }));
       }
 
-      const { data } = paymentId
-        ? await api.patch<SupplierPayment>(`/api/v1/purchases/supplier-payments/${paymentId}/`, body)
-        : await api.post<SupplierPayment>('/api/v1/purchases/supplier-payments/', body, {
+      await (paymentId
+        ? api.patch<SupplierPayment>(`/api/v1/purchases/supplier-payments/${paymentId}/`, body)
+        : api.post<SupplierPayment>('/api/v1/purchases/supplier-payments/', body, {
             headers: { 'Idempotency-Key': supplierPaymentIdempotencyKey() },
-          });
+          }));
 
-      if (!id || id === 'add') nav(`/purchase/supplier-payments/${data.id}`, { replace: true });
-      setPaymentId(data.id);
+      nav('/purchase/supplier-payments', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
