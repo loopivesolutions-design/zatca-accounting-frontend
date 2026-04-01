@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
@@ -66,12 +66,15 @@ function PaymentsList() {
   const [paymentType, setPaymentType] = useState('');
   const [suppliers, setSuppliers] = useState<SupplierChoice[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+  const addRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+      if (addRef.current && !addRef.current.contains(e.target as Node)) setAddOpen(false);
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -166,11 +169,37 @@ function PaymentsList() {
             </div>
           )}
         </div>
-        <div style={{ marginLeft: 'auto' }}>
-          <button onClick={() => nav('/purchase/supplier-payments/add')}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, paddingInline: 16, borderRadius: 8, border: 'none', backgroundColor: '#35C0A3', color: '#fff', fontSize: 13.5, fontWeight: 500, cursor: 'pointer' }}>
-            <Plus size={15} /> Add
-          </button>
+        <div ref={addRef} style={{ marginLeft: 'auto', position: 'relative' }}>
+          <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden' }}>
+            <button
+              onClick={() => nav('/purchase/supplier-payments/add')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, paddingInline: 16, border: 'none', borderRight: '1px solid rgba(255,255,255,0.25)', backgroundColor: '#35C0A3', color: '#fff', fontSize: 13.5, fontWeight: 500, cursor: 'pointer' }}>
+              <Plus size={15} /> Add
+            </button>
+            <button
+              onClick={() => setAddOpen((o) => !o)}
+              style={{ display: 'flex', alignItems: 'center', height: 36, paddingInline: 10, border: 'none', backgroundColor: '#35C0A3', color: '#fff', cursor: 'pointer' }}>
+              <ChevronDown size={14} />
+            </button>
+          </div>
+          {addOpen && (
+            <div style={{ position: 'absolute', top: 42, right: 0, zIndex: 30, backgroundColor: '#fff', border: '1px solid #e8e8e8', borderRadius: 10, boxShadow: '0 6px 20px rgba(0,0,0,0.12)', minWidth: 200, overflow: 'hidden' }}>
+              <button
+                onClick={() => { setAddOpen(false); nav('/purchase/supplier-payments/add'); }}
+                style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 13.5, color: '#1a1a1a', background: 'none', border: 'none', cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9fafb')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                Bill Payment
+              </button>
+              <button
+                onClick={() => { setAddOpen(false); nav('/purchase/supplier-refunds/add'); }}
+                style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 13.5, color: '#1a1a1a', background: 'none', border: 'none', cursor: 'pointer' }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9fafb')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
+                Receive Refund
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

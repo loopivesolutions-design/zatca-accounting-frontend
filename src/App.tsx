@@ -18,6 +18,7 @@ import Suppliers from './pages/purchase/Suppliers';
 import Bills from './pages/purchase/Bills';
 import SupplierPayments from './pages/purchase/SupplierPayments';
 import DebitNotes from './pages/purchase/DebitNotes';
+import SupplierRefunds from './pages/purchase/SupplierRefunds';
 import Customers from './pages/sales/Customers';
 import Quotes from './pages/sales/Quotes';
 import Invoices from './pages/sales/Invoices';
@@ -64,6 +65,8 @@ export default function App() {
             <Route path="/purchase/supplier-payments/:id" element={<SupplierPayments />} />
             <Route path="/purchase/debit-notes" element={<DebitNotes />} />
             <Route path="/purchase/debit-notes/:id" element={<DebitNotes />} />
+            <Route path="/purchase/supplier-refunds" element={<SupplierRefunds />} />
+            <Route path="/purchase/supplier-refunds/:id" element={<SupplierRefunds />} />
             <Route path="/vat-zatca" element={<Placeholder title="VAT & ZATCA" />} />
             <Route path="/products" element={<Navigate to="/products/items" replace />} />
             <Route path="/products/items" element={<ProductItems />} />
