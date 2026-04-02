@@ -428,12 +428,10 @@ function QuotesEditor() {
   }
 
   async function saveAndSend() {
-    let targetId = quoteId;
-    if (!targetId) {
-      targetId = await saveQuote(false);
-      if (!targetId) return;
-      setQuoteId(targetId);
-    }
+    // Always save (create or update) before sending so edits are not lost
+    const targetId = await saveQuote(false);
+    if (!targetId) return;
+    setQuoteId(targetId);
     setSending(true);
     setError('');
     try {
