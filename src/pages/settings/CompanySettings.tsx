@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import api from '../../api/axios';
+import api, { BACKEND_URL } from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
 interface CompanySettings {
@@ -35,11 +35,10 @@ interface Country {
 function resolveMediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
-  const base = 'https://zatca-backend.loopive.com';
   // Any absolute path (e.g. /media/... or /api/v1/media/...) — just prepend origin
-  if (path.startsWith('/')) return `${base}${path}`;
+  if (path.startsWith('/')) return `${BACKEND_URL}${path}`;
   // Bare relative path — assume it lives under /media/
-  return `${base}/media/${path}`;
+  return `${BACKEND_URL}/media/${path}`;
 }
 
 const inputSt: React.CSSProperties = {
