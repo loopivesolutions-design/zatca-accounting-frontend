@@ -180,6 +180,13 @@ function CustomersModal({
     e.preventDefault();
     setError('');
 
+    if (vatTreatment === 'vat_registered_ksa' && trn) {
+      if (!/^3\d{13}3$/.test(trn)) {
+        setError('Tax Registration Number must be exactly 15 digits, starting and ending with 3.');
+        return;
+      }
+    }
+
     if (openingType !== 'none') {
       const amt = Number(openingAmount);
       if (!Number.isFinite(amt) || amt <= 0) {
@@ -313,10 +320,12 @@ function CustomersModal({
                 </span>
                 <input
                   value={trn}
-                  onChange={(e) => setTrn(e.target.value)}
+                  onChange={(e) => setTrn(e.target.value.replace(/\D/g, '').slice(0, 15))}
                   style={inputSt}
                   required={vatTreatment === 'vat_registered_ksa'}
-                  placeholder={vatTreatment === 'vat_registered_ksa' ? '' : 'Optional'}
+                  placeholder={vatTreatment === 'vat_registered_ksa' ? '3XXXXXXXXXXXXX3' : 'Optional'}
+                  maxLength={15}
+                  inputMode="numeric"
                 />
               </div>
             </div>
