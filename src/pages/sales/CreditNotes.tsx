@@ -10,7 +10,7 @@ function creditNoteIdempotencyKey() {
   return crypto.randomUUID();
 }
 
-type CreditNoteStatus = 'draft' | 'posted';
+type CreditNoteStatus = 'draft' | 'confirmed' | 'posted' | 'reported';
 type ZatcaSubmissionStatus = 'not_submitted' | 'pending' | 'reported' | 'cleared' | 'rejected' | 'failed';
 
 interface CustomerChoice { id: string; company_name: string; }
@@ -94,15 +94,17 @@ function fmt(v: string | number) {
 }
 
 function statusPill(status: CreditNoteStatus) {
-  const posted = status === 'posted';
+  let bg = '#f3f4f6'; let color = '#374151';
+  let label = status.toUpperCase();
+  if (status === 'confirmed') { bg = '#fef9c3'; color = '#854d0e'; label = 'CONFIRMED'; }
+  if (status === 'posted')    { bg = '#dbeafe'; color = '#1d4ed8'; label = 'POSTED'; }
+  if (status === 'reported')  { bg = '#d1fae5'; color = '#065f46'; label = 'REPORTED'; }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', height: 20, paddingInline: 8, borderRadius: 5,
-      fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3,
-      backgroundColor: posted ? '#dbeafe' : '#fef3c7',
-      color: posted ? '#1d4ed8' : '#b45309',
+      fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, backgroundColor: bg, color,
     }}>
-      {posted ? 'POSTED' : 'DRAFT'}
+      {label}
     </span>
   );
 }
@@ -519,7 +521,7 @@ function CreditNotesEditor() {
         { headers: { 'Idempotency-Key': creditNoteIdempotencyKey() } },
       );
       if (response.status === 202) {
-        setPostNotice('This credit note was submitted for approval. Posting will complete after approval (maker–checker).');
+        setPostNotice('This credit note was submitted for approval. Confirmation will complete after approval (maker–checker).');
         if (!id || id === 'add') nav(`/sales/credit-notes/${targetId}`, { replace: true });
         return;
       }
@@ -546,7 +548,7 @@ function CreditNotesEditor() {
   }
 
   async function submitZatca() {
-    if (!creditNoteId || status !== 'posted') return;
+    if (!creditNoteId || !['confirmed', 'posted', 'reported'].includes(status)) return;
     setZatcaSubmitting(true);
     setError('');
     try {
@@ -555,6 +557,7 @@ function CreditNotesEditor() {
         { submission_type: zatcaSubmissionType },
         { headers: { 'Idempotency-Key': creditNoteIdempotencyKey() } },
       );
+      if (data.status) setStatus(data.status);
       setZatcaDetail({
         zatca_uuid: data.zatca_uuid,
         zatca_invoice_hash: data.zatca_invoice_hash,
@@ -574,7 +577,7 @@ function CreditNotesEditor() {
   }
 
   async function verifyZatcaHash() {
-    if (!creditNoteId || status !== 'posted') return;
+    if (!creditNoteId || !['confirmed', 'posted', 'reported'].includes(status)) return;
     setZatcaVerifying(true);
     setError('');
     setZatcaVerifyResult(null);
@@ -632,7 +635,7 @@ function CreditNotesEditor() {
             {canEdit && (
               <button onClick={confirmAndPost} disabled={posting}
                 style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: posting ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: posting ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600 }}>
-                {posting ? 'Posting…' : 'Confirm & Post'}
+                {posting ? 'Confirming…' : 'Confirm'}
               </button>
             )}
             {creditNoteId && canEdit && (
@@ -787,8 +790,8 @@ function CreditNotesEditor() {
 
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, padding: 10 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 8 }}>ZATCA</div>
-              {status !== 'posted' ? (
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>QR and ZATCA submission appear after the credit note is posted.</div>
+              {!['confirmed', 'posted', 'reported'].includes(status) ? (
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>QR and ZATCA submission appear after the credit note is confirmed.</div>
               ) : (
                 <>
                   {qrFromApi ? (
@@ -808,7 +811,7 @@ function CreditNotesEditor() {
                     {zatcaDetail?.zatca_submission_reference ? <div style={{ wordBreak: 'break-all' }}><span style={{ color: '#9ca3af' }}>Reference</span> {zatcaDetail.zatca_submission_reference}</div> : null}
                     {zatcaDetail?.zatca_submission_error ? <div style={{ color: '#b91c1c' }}>{zatcaDetail.zatca_submission_error}</div> : null}
                   </div>
-                  {['cleared', 'reported'].includes(String(zatcaDetail?.zatca_submission_status ?? '')) ? null : (
+                  {['cleared', 'reported'].includes(String(zatcaDetail?.zatca_submission_status ?? '')) || status === 'reported' ? null : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
                       <select
                         value={zatcaSubmissionType}

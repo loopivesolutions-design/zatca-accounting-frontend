@@ -10,7 +10,7 @@ function invoiceIdempotencyKey() {
   return crypto.randomUUID();
 }
 
-type InvoiceStatus = 'draft' | 'posted' | 'paid' | 'partially_paid' | 'overdue';
+type InvoiceStatus = 'draft' | 'confirmed' | 'posted' | 'reported' | 'paid' | 'partially_paid' | 'overdue';
 type ZatcaSubmissionStatus = 'not_submitted' | 'pending' | 'reported' | 'cleared' | 'rejected' | 'failed';
 
 interface Choice { id: string; label: string; }
@@ -101,13 +101,15 @@ function fmt(v: string | number) {
 }
 
 function statusPill(status: InvoiceStatus) {
-  let bg = '#fef3c7';
-  let color = '#b45309';
-  let label = status.toUpperCase();
-  if (status === 'posted') { bg = '#dbeafe'; color = '#1d4ed8'; }
-  if (status === 'paid') { bg = '#dcfce7'; color = '#16a34a'; }
-  if (status === 'partially_paid') { bg = '#e9d5ff'; color = '#7e22ce'; }
-  if (status === 'overdue') { bg = '#fee2e2'; color = '#dc2626'; }
+  let bg = '#f3f4f6';
+  let color = '#374151';
+  let label = status.replace('_', ' ').toUpperCase();
+  if (status === 'confirmed') { bg = '#fef9c3'; color = '#854d0e'; label = 'CONFIRMED'; }
+  if (status === 'posted') { bg = '#dbeafe'; color = '#1d4ed8'; label = 'POSTED'; }
+  if (status === 'reported') { bg = '#d1fae5'; color = '#065f46'; label = 'REPORTED'; }
+  if (status === 'paid') { bg = '#dcfce7'; color = '#16a34a'; label = 'PAID'; }
+  if (status === 'partially_paid') { bg = '#e9d5ff'; color = '#7e22ce'; label = 'PARTIALLY PAID'; }
+  if (status === 'overdue') { bg = '#fee2e2'; color = '#dc2626'; label = 'OVERDUE'; }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', height: 20, paddingInline: 8, borderRadius: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, backgroundColor: bg, color }}>
       {label}
@@ -535,7 +537,7 @@ function InvoicesEditor() {
         { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } },
       );
       if (response.status === 202) {
-        setPostNotice('This invoice was submitted for approval. Posting will complete after approval (maker–checker).');
+        setPostNotice('This invoice was submitted for approval. Confirmation will complete after approval (maker–checker).');
         if (!id || id === 'add') nav(`/sales/invoices/${targetId}`, { replace: true });
         return;
       }
@@ -562,7 +564,7 @@ function InvoicesEditor() {
   }
 
   async function submitZatca() {
-    if (!invoiceId || status !== 'posted') return;
+    if (!invoiceId || !['confirmed', 'posted', 'reported'].includes(status)) return;
     setZatcaSubmitting(true);
     setError('');
     try {
@@ -571,6 +573,7 @@ function InvoicesEditor() {
         { submission_type: zatcaSubmissionType },
         { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } },
       );
+      if (data.status) setStatus(data.status);
       setZatcaDetail({
         zatca_uuid: data.zatca_uuid,
         zatca_invoice_hash: data.zatca_invoice_hash,
@@ -590,7 +593,7 @@ function InvoicesEditor() {
   }
 
   async function verifyZatcaHash() {
-    if (!invoiceId || status !== 'posted') return;
+    if (!invoiceId || !['confirmed', 'posted', 'reported'].includes(status)) return;
     setZatcaVerifying(true);
     setError('');
     setZatcaVerifyResult(null);
@@ -648,7 +651,7 @@ function InvoicesEditor() {
             {canEdit && (
               <button onClick={confirmAndPost} disabled={posting}
                 style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: posting ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: posting ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600 }}>
-                {posting ? 'Posting…' : 'Confirm & Post'}
+                {posting ? 'Confirming…' : 'Confirm'}
               </button>
             )}
             {invoiceId && canEdit && (
@@ -806,8 +809,8 @@ function InvoicesEditor() {
 
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, padding: 10 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 8 }}>ZATCA</div>
-              {status !== 'posted' ? (
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>QR and submission tools appear after the invoice is posted.</div>
+              {!['confirmed', 'posted', 'reported'].includes(status) ? (
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>QR and submission tools appear after the invoice is confirmed.</div>
               ) : (
                 <>
                   {invoiceQrFromApi ? (
@@ -827,7 +830,7 @@ function InvoicesEditor() {
                     {zatcaDetail?.zatca_submission_reference ? <div style={{ wordBreak: 'break-all' }}><span style={{ color: '#9ca3af' }}>Reference</span> {zatcaDetail.zatca_submission_reference}</div> : null}
                     {zatcaDetail?.zatca_submission_error ? <div style={{ color: '#b91c1c' }}>{zatcaDetail.zatca_submission_error}</div> : null}
                   </div>
-                  {['cleared', 'reported'].includes(String(zatcaDetail?.zatca_submission_status ?? '')) ? null : (
+                  {['cleared', 'reported'].includes(String(zatcaDetail?.zatca_submission_status ?? '')) || status === 'reported' ? null : (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
                       <select
                         value={zatcaSubmissionType}
