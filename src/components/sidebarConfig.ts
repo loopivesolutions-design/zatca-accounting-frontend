@@ -59,7 +59,6 @@ export const sidebarConfig: SidebarGroup[] = [
         path: '/sales',
         matchPaths: ['/sales', '/customers', '/customers/add', '/sales/quotes', '/sales/invoices', '/sales/customer-payments', '/sales/customer-refunds', '/sales/credit-notes'],
         children: [
-          { id: 'sales_home', label: 'Overview', path: '/sales' },
           { id: 'quotes', label: 'Quotes', path: '/sales/quotes' },
           { id: 'invoices', label: 'Invoices', path: '/sales/invoices' },
           { id: 'credit_notes', label: 'Credit Notes', path: '/sales/credit-notes' },
@@ -76,7 +75,6 @@ export const sidebarConfig: SidebarGroup[] = [
         // Note: suppliers route not present yet; placeholder kept hidden until route exists.
         matchPaths: ['/purchase', '/purchase/suppliers', '/purchase/supplier-payments', '/purchase/debit-notes'],
         children: [
-          { id: 'purchase_home', label: 'Overview', path: '/purchase' },
           { id: 'bills', label: 'Bills', path: '/purchase/bills' },
           { id: 'debit_notes', label: 'Debit Notes', path: '/purchase/debit-notes' },
           { id: 'suppliers', label: 'Suppliers', path: '/purchase/suppliers' },

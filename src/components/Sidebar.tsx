@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, matchPath } from 'react-router-dom';
-import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { sidebarConfig, type SidebarGroup, type SidebarItem } from './sidebarConfig';
 
 function normalizePath(p: string) {
@@ -12,7 +12,6 @@ function isRouteMatch(currentPath: string, item: SidebarItem): boolean {
   const matchers = item.matchPaths ?? (item.path ? [item.path] : []);
   for (const m of matchers) {
     if (!m) continue;
-    // Support both "startsWith" and param patterns
     if (m.includes(':')) {
       if (matchPath({ path: m, end: !!item.exact }, current)) return true;
     } else {
@@ -58,7 +57,6 @@ function findActiveTrail(groups: SidebarGroup[], currentPath: string): string[] 
           return true;
         }
       }
-      // Hidden children can still make parent active
       for (const child of node.children.filter((c) => c.isHidden)) {
         if (isRouteMatch(current, child)) return true;
       }
@@ -81,92 +79,177 @@ function GroupLabel({ label, collapsed }: { label?: string; collapsed: boolean }
   );
 }
 
-function SidebarLink({
+/* ─── Parent nav item (depth = 0) ─────────────────────────────────────────── */
+function ParentNavItem({
   item,
-  depth,
   collapsed,
   active,
-  onClick,
+  isExpanded,
+  onToggle,
 }: {
   item: SidebarItem;
-  depth: 0 | 1;
   collapsed: boolean;
   active: boolean;
-  onClick?: () => void;
+  isExpanded: boolean;
+  onToggle: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const Icon = item.icon;
+  const hasChildren = !!item.children?.some((c) => !c.isHidden);
 
-  const basePaddingLeft = depth === 0 ? 14 : 34;
-  const style: React.CSSProperties = {
+  const baseStyle: React.CSSProperties = {
     display: 'flex',
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
     width: '100%',
-    paddingLeft: collapsed ? 12 : basePaddingLeft,
-    paddingRight: 12,
-    paddingTop: 9,
-    paddingBottom: 9,
+    height: 48,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: collapsed ? 14 : 27,
+    paddingRight: collapsed ? 14 : 27,
     borderRadius: 8,
-    fontSize: 13.8,
-    fontWeight: active ? 600 : 400,
-    lineHeight: 1,
-    textDecoration: 'none',
-    marginBottom: 6,
     boxSizing: 'border-box',
-    transition: 'background-color 0.1s',
+    border: 'none',
     cursor: 'pointer',
     userSelect: 'none',
+    textDecoration: 'none',
+    fontFamily: "'Heebo', sans-serif",
+    fontSize: 14,
+    fontWeight: active ? 600 : 400,
+    lineHeight: '21px',
+    letterSpacing: '0.02em',
+    marginBottom: 4,
+    transition: 'background 0.15s',
     ...(active
-      ? { backgroundColor: '#35C0A3', color: '#ffffff' }
+      ? {
+          background: 'linear-gradient(111.18deg, #35C0A3 16.87%, #E2F0D3 129.13%)',
+          color: '#ffffff',
+        }
       : hovered
-        ? { backgroundColor: '#f5f5f5', color: '#616161' }
+        ? { backgroundColor: '#F2F7F6', color: '#616161' }
         : { backgroundColor: 'transparent', color: '#616161' }),
   };
 
-  const content = (
-    <>
+  const leftContent = (
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       {Icon && (
         <Icon
-          size={16}
+          size={24}
           strokeWidth={active ? 2.2 : 1.8}
-          style={{ flexShrink: 0 }}
+          style={{ flexShrink: 0, color: active ? '#ffffff' : '#616161' }}
         />
       )}
-      {!collapsed && <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>}
-    </>
+      {!collapsed && (
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {item.label}
+        </span>
+      )}
+    </div>
   );
 
-  if (!item.path) {
+  const rightContent = hasChildren && !collapsed ? (
+    <ChevronDown
+      size={14}
+      style={{
+        flexShrink: 0,
+        color: active ? '#ffffff' : '#9ca3af',
+        transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+        transition: 'transform 0.2s',
+      }}
+    />
+  ) : null;
+
+  const sharedHandlers = {
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    title: collapsed ? item.label : undefined,
+  };
+
+  // Items with children are always buttons (toggle expand)
+  if (hasChildren || !item.path) {
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        style={{ ...style, border: 'none', background: style.backgroundColor as string, textAlign: 'left' }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        title={collapsed ? item.label : undefined}
-      >
-        {content}
+      <button type="button" onClick={onToggle} style={baseStyle} {...sharedHandlers}>
+        {leftContent}
+        {rightContent}
       </button>
     );
   }
 
   return (
-    <NavLink
-      to={item.path}
-      end={!!item.exact}
-      style={style}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={onClick}
-      title={collapsed ? item.label : undefined}
-    >
-      {content}
+    <NavLink to={item.path} end={!!item.exact} style={baseStyle} onClick={onToggle} {...sharedHandlers}>
+      {leftContent}
+      {rightContent}
     </NavLink>
   );
 }
 
+/* ─── Child nav item (depth = 1) ──────────────────────────────────────────── */
+function ChildNavItem({
+  item,
+  active,
+}: {
+  item: SidebarItem;
+  active: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  const style: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 194,
+    height: 30,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: active ? 36 : 35,
+    paddingRight: active ? 36 : 35,
+    borderRadius: 4,
+    boxSizing: 'border-box',
+    border: 'none',
+    cursor: 'pointer',
+    userSelect: 'none',
+    textDecoration: 'none',
+    fontFamily: "'Heebo', sans-serif",
+    fontSize: 14,
+    fontWeight: hovered && !active ? 500 : 400,
+    lineHeight: '21px',
+    letterSpacing: '0.02em',
+    marginBottom: 2,
+    ...(active
+      ? { backgroundColor: '#E2F0D3', color: '#616161' }
+      : hovered
+        ? { backgroundColor: '#F2F7F6', color: '#979797' }
+        : { backgroundColor: 'transparent', color: '#979797' }),
+  };
+
+  const label = (
+    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {item.label}
+    </span>
+  );
+
+  const sharedHandlers = {
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+  };
+
+  if (!item.path) {
+    return (
+      <button type="button" style={style} {...sharedHandlers}>
+        {label}
+      </button>
+    );
+  }
+
+  return (
+    <NavLink to={item.path} end={!!item.exact} style={style} {...sharedHandlers}>
+      {label}
+    </NavLink>
+  );
+}
+
+/* ─── Sidebar ──────────────────────────────────────────────────────────────── */
 export default function Sidebar() {
   const { pathname } = useLocation();
 
@@ -178,7 +261,6 @@ export default function Sidebar() {
     try { return localStorage.getItem('sidebar:collapsed') === '1'; } catch { return false; }
   });
 
-  // Expanded state only applies to top-level items with children.
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     try {
       const raw = localStorage.getItem('sidebar:expanded');
@@ -187,7 +269,6 @@ export default function Sidebar() {
   });
 
   useEffect(() => {
-    // Auto-expand active parent when navigating
     if (activeTop) {
       setExpanded((prev) => (prev[activeTop] ? prev : { ...prev, [activeTop]: true }));
     }
@@ -202,7 +283,6 @@ export default function Sidebar() {
   }, [expanded]);
 
   const groups = useMemo(() => {
-    // Remove hidden items from rendering, but keep them in matching logic.
     return sidebarConfig.map((g) => ({
       ...g,
       items: g.items.filter((it) => !it.isHidden),
@@ -212,9 +292,9 @@ export default function Sidebar() {
   return (
     <aside
       style={{
-        width: collapsed ? 64 : '14vw',
-        minWidth: collapsed ? 64 : '160px',
-        maxWidth: collapsed ? 64 : 220,
+        width: collapsed ? 64 : 260,
+        minWidth: collapsed ? 64 : 260,
+        maxWidth: collapsed ? 64 : 260,
         fontFamily: "'Heebo', sans-serif",
         backgroundColor: '#ffffff',
         borderRight: '1px solid #efefef',
@@ -286,88 +366,53 @@ export default function Sidebar() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          padding: collapsed ? '0 8px' : '0 10px 0 14px',
+          padding: collapsed ? '0 8px' : '0 8px',
           flex: 1,
           overflowY: 'auto',
         }}
       >
         {groups.map((group) => (
-          <div key={group.id} style={{ paddingBottom: 6 }}>
+          <div key={group.id} style={{ paddingBottom: 4 }}>
             <GroupLabel label={group.label} collapsed={collapsed} />
             {group.items.map((item) => {
-              const active = isRouteMatch(pathname, item) || (item.children ? flatten(item.children).some((c) => isRouteMatch(pathname, c)) : false);
-              const hasChildren = !!item.children?.some((c) => !c.isHidden);
+              const hasVisibleChildren = !!item.children?.some((c) => !c.isHidden);
+              const active =
+                isRouteMatch(pathname, item) ||
+                (item.children ? flatten(item.children).some((c) => isRouteMatch(pathname, c)) : false);
               const isExpanded = !!expanded[item.id];
 
-              if (!hasChildren) {
-                return (
-                  <SidebarLink
-                    key={item.id}
+              return (
+                <div key={item.id}>
+                  <ParentNavItem
                     item={item}
-                    depth={0}
                     collapsed={collapsed}
                     active={active}
+                    isExpanded={isExpanded}
+                    onToggle={() => {
+                      if (hasVisibleChildren) {
+                        setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+                        if (collapsed) setCollapsed(false);
+                      } else if (collapsed) {
+                        setCollapsed(false);
+                      }
+                    }}
                   />
-                );
-              }
 
-              return (
-                <div key={item.id} style={{ marginBottom: 6 }}>
-                  <div style={{ position: 'relative' }}>
-                    <SidebarLink
-                      item={item}
-                      depth={0}
-                      collapsed={collapsed}
-                      active={active && !item.exact} // child will be highlighted; parent stays subtle via chevron state
-                      onClick={() => {
-                        // If collapsed: first click expands + opens group, second click navigates (via NavLink)
-                        setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
-                        if (collapsed) setCollapsed(false);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
-                        if (collapsed) setCollapsed(false);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: collapsed ? 6 : 10,
-                        top: 6,
-                        width: collapsed ? 24 : 28,
-                        height: collapsed ? 24 : 28,
-                        borderRadius: 8,
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        cursor: 'pointer',
-                        color: active ? '#ffffff' : '#9ca3af',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                      title={isExpanded ? 'Collapse' : 'Expand'}
-                      aria-label={isExpanded ? 'Collapse menu' : 'Expand menu'}
-                    >
-                      {isExpanded ? <ChevronDown size={collapsed ? 14 : 16} /> : <ChevronRight size={collapsed ? 14 : 16} />}
-                    </button>
-                  </div>
-
-                  {/* Children (1 level deep) */}
-                  {!collapsed && isExpanded && (
-                    <div style={{ marginTop: 2 }}>
-                      {item.children
-                        ?.filter((c) => !c.isHidden)
+                  {/* Children */}
+                  {!collapsed && hasVisibleChildren && isExpanded && (
+                    <div style={{ marginBottom: 4, paddingLeft: 8 }}>
+                      {item.children!
+                        .filter((c) => !c.isHidden)
                         .map((child) => {
-                          const childActive = isRouteMatch(pathname, child) || (child.children ? flatten(child.children).some((c) => isRouteMatch(pathname, c)) : false);
+                          const childActive =
+                            isRouteMatch(pathname, child) ||
+                            (child.children
+                              ? flatten(child.children).some((c) => isRouteMatch(pathname, c))
+                              : false);
                           return (
-                            <SidebarLink
+                            <ChildNavItem
                               key={child.id}
                               item={child}
-                              depth={1}
-                              collapsed={false}
                               active={childActive}
                             />
                           );
