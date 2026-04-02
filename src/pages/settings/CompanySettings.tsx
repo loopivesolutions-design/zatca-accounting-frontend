@@ -86,6 +86,7 @@ export default function CompanySettingsPage() {
   // Draft fields
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
   const [draft, setDraft] = useState<Partial<CompanySettings>>({});
 
   useEffect(() => {
@@ -126,9 +127,10 @@ export default function CompanySettingsPage() {
   }, [logoFile]);
 
   const currentLogo = useMemo(() => {
+    if (logoRemoved) return null;
     if (logoPreview) return logoPreview;
     return resolveMediaUrl(data?.logo);
-  }, [logoPreview, data?.logo]);
+  }, [logoRemoved, logoPreview, data?.logo]);
 
   function startEdit() {
     if (!data) return;
@@ -136,6 +138,7 @@ export default function CompanySettingsPage() {
     setDraft(data);
     setLogoFile(null);
     setLogoPreview(null);
+    setLogoRemoved(false);
   }
 
   function cancelEdit() {
@@ -144,6 +147,7 @@ export default function CompanySettingsPage() {
     setDraft(data);
     setLogoFile(null);
     setLogoPreview(null);
+    setLogoRemoved(false);
     setError('');
   }
 
@@ -155,8 +159,34 @@ export default function CompanySettingsPage() {
       let res: CompanySettings;
 
       if (hasLogo) {
+        // Upload new logo via multipart
         const fd = new FormData();
         fd.append('logo', logoFile!);
+        const fields: (keyof CompanySettings)[] = [
+          'company_name', 'company_name_ar',
+          'street_address', 'street_address_ar',
+          'building_number',
+          'district', 'district_ar',
+          'city', 'city_ar',
+          'country',
+          'postal_code',
+          'cr_number',
+          'vat_registration_number',
+          'industry',
+          'email',
+          'phone',
+        ];
+        for (const k of fields) {
+          const v = (draft as any)[k];
+          if (v === undefined || v === null) continue;
+          fd.append(String(k), String(v));
+        }
+        const { data: out } = await api.patch<CompanySettings>('/api/v1/main/company-settings/', fd);
+        res = out;
+      } else if (logoRemoved) {
+        // Clear existing logo — send as multipart so Django accepts an empty file field
+        const fd = new FormData();
+        fd.append('logo', '');
         const fields: (keyof CompanySettings)[] = [
           'company_name', 'company_name_ar',
           'street_address', 'street_address_ar',
@@ -207,6 +237,7 @@ export default function CompanySettingsPage() {
       setEditMode(false);
       setLogoFile(null);
       setLogoPreview(null);
+      setLogoRemoved(false);
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -231,7 +262,7 @@ export default function CompanySettingsPage() {
             <button
               onClick={startEdit}
               disabled={loading || !data}
-              style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: '#35C0A3', color: '#fff', cursor: 'pointer', fontSize: 13.5 }}
+              style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: '#35C0A3', color: '#fff', cursor: 'pointer', fontSize: 13.5, userSelect: 'none' }}
             >
               Edit
             </button>
@@ -240,14 +271,14 @@ export default function CompanySettingsPage() {
               <button
                 onClick={cancelEdit}
                 disabled={saving}
-                style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#555', cursor: 'pointer', fontSize: 13.5 }}
+                style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#555', cursor: 'pointer', fontSize: 13.5, userSelect: 'none' }}
               >
                 Cancel
               </button>
               <button
                 onClick={save}
                 disabled={saving}
-                style={{ height: 32, paddingInline: 18, borderRadius: 7, border: 'none', backgroundColor: saving ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 500 }}
+                style={{ height: 32, paddingInline: 18, borderRadius: 7, border: 'none', backgroundColor: saving ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 500, userSelect: 'none' }}
               >
                 {saving ? 'Saving…' : 'Save'}
               </button>
@@ -285,7 +316,7 @@ export default function CompanySettingsPage() {
 
                   {editMode && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                      <label style={{ fontSize: 12.5, color: '#35C0A3', cursor: 'pointer' }}>
+                      <label style={{ fontSize: 12.5, color: '#35C0A3', cursor: 'pointer', userSelect: 'none' }}>
                         Change Image
                         <input
                           type="file"
@@ -296,9 +327,9 @@ export default function CompanySettingsPage() {
                       </label>
                       <button
                         type="button"
-                        title="Clear selected file"
-                        onClick={() => { setLogoFile(null); setLogoPreview(null); }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', display: 'inline-flex', alignItems: 'center' }}
+                        title="Remove logo"
+                        onClick={() => { setLogoFile(null); setLogoPreview(null); setLogoRemoved(true); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', display: 'inline-flex', alignItems: 'center', userSelect: 'none' }}
                       >
                         <Trash2 size={15} />
                       </button>
