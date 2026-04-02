@@ -417,6 +417,16 @@ function QuotesEditor() {
       setQuoteId(data.id);
       setStatus(data.status);
       setIssuer(data.issuer_details ?? null);
+      // Sync lines state with what the server persisted (fresh IDs, no stale soft-deleted rows)
+      setLines((data.lines ?? []).map((l) => ({
+        id: l.id,
+        product: l.product ?? null,
+        description: l.description ?? '',
+        quantity: String(l.quantity ?? '1'),
+        unit_price: String(l.unit_price ?? ''),
+        tax_rate: l.tax_rate ?? null,
+        discount_percent: String(l.discount_percent ?? '0'),
+      })));
       if (navigateAfterCreate) nav('/sales/quotes', { replace: true });
       return data.id;
     } catch (err) {
