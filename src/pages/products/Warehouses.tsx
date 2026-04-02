@@ -448,7 +448,11 @@ export default function Warehouses() {
         created?: number;
         skipped?: { id: string; name: string; reason: string; detail: string }[];
         not_found?: string[];
-      }>('/api/v1/products/warehouses/bulk/', { action, ids: Array.from(selected) });
+      }>(
+        '/api/v1/products/warehouses/bulk/',
+        { action, ids: Array.from(selected) },
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+      );
 
       if (action === 'delete') {
         const skippedIds = new Set((data.skipped ?? []).map((s) => s.id));
