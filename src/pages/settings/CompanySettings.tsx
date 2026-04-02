@@ -36,9 +36,10 @@ function resolveMediaUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   const base = 'https://zatca-backend.loopive.com';
-  if (path.startsWith('/media/')) return `${base}${path}`;
-  const clean = path.replace(/^\/+/, '');
-  return `${base}/media/${clean}`;
+  // Any absolute path (e.g. /media/... or /api/v1/media/...) — just prepend origin
+  if (path.startsWith('/')) return `${base}${path}`;
+  // Bare relative path — assume it lives under /media/
+  return `${base}/media/${path}`;
 }
 
 const inputSt: React.CSSProperties = {
