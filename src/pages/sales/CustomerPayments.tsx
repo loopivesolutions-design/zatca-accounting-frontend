@@ -157,6 +157,7 @@ function PaymentsList() {
                     <option value="">All</option>
                     <option value="invoice_payment">Invoice Payments</option>
                     <option value="advance_payment">Advance Payments</option>
+                    <option value="customer_refund">Customer Refund</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
@@ -196,7 +197,7 @@ function PaymentsList() {
                 style={{ display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left', fontSize: 13.5, color: '#1a1a1a', background: 'none', border: 'none', cursor: 'pointer' }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9fafb')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}>
-                Receive Refund
+                Customer Refund
               </button>
             </div>
           )}
