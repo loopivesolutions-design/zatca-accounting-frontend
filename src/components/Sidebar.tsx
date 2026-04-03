@@ -70,13 +70,9 @@ function getTopLevelIds(groups: SidebarGroup[]) {
   return new Set(groups.flatMap((g) => g.items.map((i) => i.id)));
 }
 
-function GroupLabel({ label, collapsed }: { label?: string; collapsed: boolean }) {
-  if (!label || collapsed) return null;
-  return (
-    <div style={{ padding: '10px 16px 6px', fontSize: 11.5, color: '#9ca3af', fontWeight: 600, letterSpacing: 0.2 }}>
-      {label}
-    </div>
-  );
+// Section headings intentionally hidden per design spec.
+function GroupLabel(_: { label?: string; collapsed: boolean }) {
+  return null;
 }
 
 /* ─── Parent nav item (depth = 0) ─────────────────────────────────────────── */
@@ -119,7 +115,7 @@ function ParentNavItem({
     fontWeight: active ? 600 : 400,
     lineHeight: '21px',
     letterSpacing: '0.02em',
-    marginBottom: 4,
+    marginBottom: 6,
     transition: 'background 0.15s',
     ...(active
       ? {
@@ -148,15 +144,11 @@ function ParentNavItem({
     </div>
   );
 
-  const rightContent = hasChildren && !collapsed ? (
+  // Chevron only visible when the item is expanded (not when collapsed/closed).
+  const rightContent = hasChildren && !collapsed && isExpanded ? (
     <ChevronDown
       size={14}
-      style={{
-        flexShrink: 0,
-        color: active ? '#ffffff' : '#9ca3af',
-        transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-        transition: 'transform 0.2s',
-      }}
+      style={{ flexShrink: 0, color: active ? '#ffffff' : '#9ca3af' }}
     />
   ) : null;
 
@@ -268,9 +260,10 @@ export default function Sidebar() {
     } catch { return {}; }
   });
 
+  // Accordion: keep only the active top-level item open on navigation.
   useEffect(() => {
     if (activeTop) {
-      setExpanded((prev) => (prev[activeTop] ? prev : { ...prev, [activeTop]: true }));
+      setExpanded((prev) => (prev[activeTop] && Object.keys(prev).length === 1 ? prev : { [activeTop]: true }));
     }
   }, [activeTop]);
 
@@ -290,6 +283,12 @@ export default function Sidebar() {
   }, []);
 
   return (
+    <>
+    <style>{`
+      .sidebar-nav::-webkit-scrollbar { width: 4px; }
+      .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+      .sidebar-nav::-webkit-scrollbar-thumb { background-color: #E6E6E6; border-radius: 4px; }
+    `}</style>
     <aside
       style={{
         width: collapsed ? 64 : 260,
@@ -363,12 +362,16 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav
+        className="sidebar-nav"
         style={{
           display: 'flex',
           flexDirection: 'column',
           padding: collapsed ? '0 8px' : '0 8px',
+          paddingTop: 60,
           flex: 1,
           overflowY: 'auto',
+          scrollbarColor: '#E6E6E6 transparent',
+          scrollbarWidth: 'thin',
         }}
       >
         {groups.map((group) => (
@@ -390,7 +393,11 @@ export default function Sidebar() {
                     isExpanded={isExpanded}
                     onToggle={() => {
                       if (hasVisibleChildren) {
-                        setExpanded((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+                        // Accordion: opening one closes all others.
+                        setExpanded((prev) => {
+                          const wasOpen = !!prev[item.id];
+                          return wasOpen ? {} : { [item.id]: true };
+                        });
                         if (collapsed) setCollapsed(false);
                       } else if (collapsed) {
                         setCollapsed(false);
@@ -468,5 +475,6 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }
