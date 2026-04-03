@@ -157,6 +157,7 @@ function PaymentsList() {
                     <option value="">All</option>
                     <option value="bill_payment">Bill Payments</option>
                     <option value="advance_payment">Advance Payments</option>
+                    <option value="received_refund">Received Refund</option>
                   </select>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
