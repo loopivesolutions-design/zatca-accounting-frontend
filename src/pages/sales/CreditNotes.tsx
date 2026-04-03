@@ -204,7 +204,11 @@ function CreditNotesList() {
                   <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...inputSt, height: 34 }}>
                     <option value="">All</option>
                     <option value="draft">Draft</option>
-                    <option value="posted">Posted</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="reported">Reported</option>
+                    <option value="paid">Paid</option>
+                    <option value="partially_paid">Partially paid</option>
+                    <option value="overdue">Overdue</option>
                   </select>
                 </div>
                 <div>
@@ -494,7 +498,7 @@ function CreditNotesEditor() {
         zatca_cleared_at: data.zatca_cleared_at,
       });
       setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
-      if (navigateAfterCreate && (!id || id === 'add')) nav(`/sales/credit-notes/${data.id}`, { replace: true });
+      if (navigateAfterCreate) nav('/sales/credit-notes', { replace: true });
       return data.id;
     } catch (err) {
       setError(parseApiError(err));
