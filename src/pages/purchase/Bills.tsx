@@ -623,6 +623,7 @@ function BillsList() {
                 fontSize: 13,
                 fontWeight: active ? 600 : 500,
                 cursor: 'pointer',
+                userSelect: 'none',
               }}
             >
               {t.label}
