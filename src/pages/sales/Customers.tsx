@@ -285,7 +285,16 @@ function CustomersModal({
                 <div />
 
                 <span style={labelSt}>Phone Number</span>
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} style={inputSt} />
+                <input
+                  value={phone}
+                  onChange={(e) => {
+                    // Allow digits, spaces, and phone formatting characters: + ( ) - and the word ext
+                    const filtered = e.target.value.replace(/[^\d\s+()\-extEXT]/g, '');
+                    setPhone(filtered);
+                  }}
+                  style={inputSt}
+                  placeholder="+1 (555) 123-4567 ext 89"
+                />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 12.5, color: '#666' }}>Status</span>
                   <button type="button" onClick={() => setIsActive((p) => !p)}
