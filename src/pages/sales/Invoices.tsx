@@ -149,7 +149,8 @@ function InvoicesList() {
       ]);
       setStatuses(iRes.data.statuses ?? iRes.data.invoice_statuses ?? [
         { id: 'draft', label: 'Draft' },
-        { id: 'posted', label: 'Posted' },
+        { id: 'confirmed', label: 'Confirmed' },
+        { id: 'reported', label: 'Reported' },
         { id: 'paid', label: 'Paid' },
         { id: 'partially_paid', label: 'Partially paid' },
         { id: 'overdue', label: 'Overdue' },
@@ -510,7 +511,7 @@ function InvoicesEditor() {
         zatca_cleared_at: data.zatca_cleared_at,
       });
       setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
-      if (navigateAfterCreate && (!id || id === 'add')) nav(`/sales/invoices/${data.id}`, { replace: true });
+      if (navigateAfterCreate) nav('/sales/invoices', { replace: true });
       return data.id;
     } catch (err) {
       setError(parseApiError(err));
