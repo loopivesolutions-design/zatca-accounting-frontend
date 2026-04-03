@@ -142,7 +142,7 @@ export const sidebarConfig: SidebarGroup[] = [
         path: '/accounting',
         matchPaths: ['/accounting', '/accounting/tax-rates', '/accounting/journal-entries'],
         children: [
-          { id: 'chart_of_accounts', label: 'Chart of Accounts', path: '/accounting' },
+          { id: 'chart_of_accounts', label: 'Chart of Accounts', path: '/accounting', exact: true },
           { id: 'tax_rates', label: 'Tax Rates', path: '/accounting/tax-rates' },
           { id: 'journal_entries', label: 'Journal Entries', path: '/accounting/journal-entries' },
         ],
@@ -161,7 +161,7 @@ export const sidebarConfig: SidebarGroup[] = [
         exact: true, // avoid highlighting for /settings/company-settings
         matchPaths: ['/settings', '/settings/company-settings', '/settings/approvals'],
         children: [
-          { id: 'user_roles', label: 'Users & Roles', path: '/settings' },
+          { id: 'user_roles', label: 'Users & Roles', path: '/settings', exact: true },
           { id: 'org_settings', label: 'Organization', path: '/settings/company-settings' },
           { id: 'approvals', label: 'Approvals', path: '/settings/approvals', icon: ClipboardCheck },
         ],
