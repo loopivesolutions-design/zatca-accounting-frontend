@@ -336,6 +336,7 @@ function DebitNotesEditor() {
 
   const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
 
   const [debitNoteId, setDebitNoteId] = useState<string | null>(isCreate ? null : id || null);
@@ -454,8 +455,8 @@ function DebitNotesEditor() {
     setLines((prev) => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx));
   }
 
-  async function saveDebitNote() {
-    if (!canEdit) return;
+  async function saveDraft(navigateAfter = true): Promise<string | null> {
+    if (!canEdit) return null;
     setSaving(true);
     setError('');
     try {
@@ -478,11 +479,36 @@ function DebitNotesEditor() {
         : await api.post<DebitNoteDetail>('/api/v1/purchases/debit-notes/', body);
       setDebitNoteId(data.id);
       setStatus(data.status);
+      if (navigateAfter) nav('/purchase/debit-notes', { replace: true });
+      return data.id;
+    } catch (err) {
+      setError(parseApiError(err));
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function postDebitNote() {
+    let targetId = debitNoteId;
+    if (!targetId) {
+      targetId = await saveDraft(false);
+      if (!targetId) return;
+      setDebitNoteId(targetId);
+    }
+    setPosting(true);
+    setError('');
+    try {
+      await api.post(
+        `/api/v1/purchases/debit-notes/${targetId}/post/`,
+        {},
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+      );
       nav('/purchase/debit-notes', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
-      setSaving(false);
+      setPosting(false);
     }
   }
 
@@ -521,8 +547,15 @@ function DebitNotesEditor() {
             {statusPill(status)}
             <button onClick={() => nav('/purchase/debit-notes')} style={{ height: 32, paddingInline: 12, borderRadius: 7, border: '1px solid #e0e0e0', backgroundColor: '#fff', color: '#555', cursor: 'pointer', fontSize: 13.5 }}>Cancel</button>
             {canEdit && (
-              <button onClick={() => { void saveDebitNote(); }} disabled={saving} style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: saving ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600 }}>
-                {saving ? 'Saving…' : 'Save'}
+              <button onClick={() => { void saveDraft(); }} disabled={saving || posting}
+                style={{ height: 32, paddingInline: 14, borderRadius: 7, border: '1px solid #d1f1e7', backgroundColor: '#f0fdf9', color: '#0f766e', cursor: (saving || posting) ? 'not-allowed' : 'pointer', fontSize: 13.5 }}>
+                {saving ? 'Saving…' : 'Save as Draft'}
+              </button>
+            )}
+            {canEdit && (
+              <button onClick={() => { void postDebitNote(); }} disabled={saving || posting}
+                style={{ height: 32, paddingInline: 14, borderRadius: 7, border: 'none', backgroundColor: (saving || posting) ? '#a8e4d8' : '#35C0A3', color: '#fff', cursor: (saving || posting) ? 'not-allowed' : 'pointer', fontSize: 13.5, fontWeight: 600 }}>
+                {posting ? 'Posting…' : 'Post'}
               </button>
             )}
             {canEdit && debitNoteId && (
