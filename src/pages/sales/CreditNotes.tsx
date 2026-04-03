@@ -522,24 +522,10 @@ function CreditNotesEditor() {
       );
       if (response.status === 202) {
         setPostNotice('This credit note was submitted for approval. Confirmation will complete after approval (maker–checker).');
-        if (!id || id === 'add') nav(`/sales/credit-notes/${targetId}`, { replace: true });
+        nav('/sales/credit-notes', { replace: true });
         return;
       }
-      const data = response.data;
-      setStatus(data.status);
-      setQrFromApi(data.qr_code_text ?? '');
-      setZatcaDetail({
-        zatca_uuid: data.zatca_uuid,
-        zatca_invoice_hash: data.zatca_invoice_hash,
-        zatca_submission_status: data.zatca_submission_status,
-        zatca_submission_type: data.zatca_submission_type,
-        zatca_submission_reference: data.zatca_submission_reference,
-        zatca_submission_error: data.zatca_submission_error,
-        zatca_submitted_at: data.zatca_submitted_at,
-        zatca_cleared_at: data.zatca_cleared_at,
-      });
-      setZatcaSubmissionLogs(data.zatca_submission_logs ?? []);
-      if (!id || id === 'add') nav(`/sales/credit-notes/${targetId}`, { replace: true });
+      nav('/sales/credit-notes', { replace: true });
     } catch (err) {
       setError(parseApiError(err));
     } finally {
