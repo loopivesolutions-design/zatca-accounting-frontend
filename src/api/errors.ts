@@ -11,6 +11,11 @@ interface ApiErrorBody {
   [key: string]: unknown;  // validation field errors: { "rate": ["..."] }
 }
 
+/** Convert a snake_case field key to a readable label, e.g. "street_address" → "Street address". */
+function humanizeField(key: string): string {
+  return key.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /**
  * Extract the best user-facing message from an axios error.
  * Returns { title, detail } where:
@@ -37,15 +42,27 @@ export function parseApiError(err: unknown): string {
     return body.non_field_errors.join('\n');
   }
 
-  // DRF validation error — flat or nested field errors
+  // DRF validation error — flat or nested field errors (include field name for clarity)
+  const SKIP_KEYS = new Set(['error', 'message', 'suggestion', 'details', 'locked_fields', 'editable_fields']);
   const lines: string[] = [];
-  for (const val of Object.values(body)) {
+  for (const [key, val] of Object.entries(body)) {
+    if (SKIP_KEYS.has(key)) continue;
+    const label = key === 'non_field_errors' ? '' : `${humanizeField(key)}: `;
     if (Array.isArray(val)) {
       for (const item of val) {
-        if (typeof item === 'string') lines.push(item);
-        else if (item && typeof item === 'object') lines.push(JSON.stringify(item));
+        if (typeof item === 'string') lines.push(label + item);
+        else if (item && typeof item === 'object') {
+          // nested object errors (e.g. lines[0].amount)
+          for (const [subKey, subVal] of Object.entries(item as Record<string, unknown>)) {
+            const subLabel = `${humanizeField(key)} › ${humanizeField(subKey)}: `;
+            if (Array.isArray(subVal)) subVal.forEach((m) => { if (typeof m === 'string') lines.push(subLabel + m); });
+            else if (typeof subVal === 'string') lines.push(subLabel + subVal);
+          }
+        }
       }
-    } else if (typeof val === 'string') lines.push(val);
+    } else if (typeof val === 'string') {
+      lines.push(label + val);
+    }
   }
   if (lines.length) return lines.join('\n');
 
