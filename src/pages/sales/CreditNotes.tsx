@@ -72,7 +72,7 @@ interface CreditNoteDetail {
   balance_amount: string;
   issuer_details?: {
     company_name?: string;
-    address?: string;
+    street_address?: string;
     vat_registration_number?: string;
     logo?: string | null;
   };
@@ -307,8 +307,8 @@ function CreditNotesEditor() {
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-  const [attachmentName, setAttachmentName] = useState('');
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [priceMode, setPriceMode] = useState<'inc_tax' | 'ex_tax'>('inc_tax');
   const [postNotice, setPostNotice] = useState('');
   const [zatcaSubmitting, setZatcaSubmitting] = useState(false);
@@ -348,15 +348,24 @@ function CreditNotesEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [cRes, tRes, pRes, aRes] = await Promise.all([
+      const [cRes, tRes, pRes, aRes, cnChoicesRes, csRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/sales/customers/?page_size=200&active=true'),
         api.get<{ results: any[] }>('/api/v1/accounting/tax-rates/?page_size=200&active=true&tax_type=sales'),
         api.get<{ results: any[] }>('/api/v1/products/items/?page_size=200&active=true'),
         api.get<any[]>('/api/v1/accounting/chart-of-accounts/tree/'),
+        api.get<{ next_number?: string }>('/api/v1/sales/credit-notes/choices/'),
+        api.get<{ company_name?: string; street_address?: string; vat_registration_number?: string; logo?: string | null }>('/api/v1/main/company-settings/'),
       ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
       setTaxRates((tRes.data.results ?? []).map((t) => ({ id: t.id, name: t.name, rate: t.rate })));
       setProducts((pRes.data.results ?? []).map((p) => ({ id: p.id, code: p.code ?? '', name: p.name ?? '' })));
+      if (isCreate && cnChoicesRes.data.next_number) {
+        setCreditNoteNumber(cnChoicesRes.data.next_number);
+      }
+      if (isCreate) {
+        const cs = csRes.data;
+        setIssuer({ company_name: cs.company_name, street_address: cs.street_address, vat_registration_number: cs.vat_registration_number, logo: cs.logo ?? null });
+      }
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
@@ -371,7 +380,7 @@ function CreditNotesEditor() {
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isCreate]);
 
   const fetchCreditNote = useCallback(async () => {
     if (isCreate || !id) return;
@@ -386,7 +395,8 @@ function CreditNotesEditor() {
       setCustomer(data.customer ?? '');
       setDate(data.date ?? '');
       setNote(data.note ?? '');
-      setAttachmentName(data.attachment ?? '');
+      if (data.attachment) setAttachmentNames([data.attachment]);
+      else setAttachmentNames([]);
       setIssuer(data.issuer_details ?? null);
       setQrFromApi(data.qr_code_text ?? '');
       setZatcaDetail({
@@ -474,12 +484,15 @@ function CreditNotesEditor() {
         ? await api.patch<CreditNoteDetail>(`/api/v1/sales/credit-notes/${creditNoteId}/`, body, idem)
         : await api.post<CreditNoteDetail>('/api/v1/sales/credit-notes/', body, idem);
 
-      if (attachmentFile && data.id) {
-        const fd = new FormData();
-        fd.append('attachment', attachmentFile);
-        await api.patch(`/api/v1/sales/credit-notes/${data.id}/`, fd, {
-          headers: { 'Idempotency-Key': creditNoteIdempotencyKey() },
-        });
+      if (attachmentFiles.length > 0 && data.id) {
+        for (const file of attachmentFiles) {
+          const fd = new FormData();
+          fd.append('attachment', file);
+          await api.patch(`/api/v1/sales/credit-notes/${data.id}/`, fd, {
+            headers: { 'Idempotency-Key': creditNoteIdempotencyKey() },
+          });
+        }
+        setAttachmentFiles([]);
       }
 
       setCreditNoteId(data.id);
@@ -652,10 +665,8 @@ function CreditNotesEditor() {
               </select>
               <span style={{ fontSize: 12.5, color: '#555' }}>Date*</span>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
-              <span style={{ fontSize: 12.5, color: '#555' }}>Credit Note #*</span>
-              <input value={creditNoteNumber} onChange={(e) => setCreditNoteNumber(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
-              <span style={{ fontSize: 12.5, color: '#555' }}>External ref.</span>
-              <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional ERP reference" />
+              <span style={{ fontSize: 12.5, color: '#555' }}>Credit Note #</span>
+              <input value={creditNoteNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -760,22 +771,42 @@ function CreditNotesEditor() {
                 <img src={issuer.logo} alt="Issuer logo" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }} />
               ) : null}
               <div style={{ fontSize: 12.5, color: '#111827', fontWeight: 600 }}>{issuer?.company_name || 'Your Company Name'}</div>
-              <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>{issuer?.address || 'Riyadh'}</div>
+              {issuer?.street_address && <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>{issuer.street_address}</div>}
               <div style={{ fontSize: 11.5, color: '#6b7280' }}>VAT: {issuer?.vat_registration_number || '-'}</div>
             </div>
 
             <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 12, backgroundColor: '#f9fafb', padding: '12px 10px' }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: '#666', marginBottom: 10 }}>Attachments</div>
-              <label style={{ width: '100%', minHeight: 140, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'not-allowed', color: canEdit ? '#666' : '#aaa', textAlign: 'center', padding: 12, boxSizing: 'border-box' }}>
-                <UploadCloud size={20} style={{ marginBottom: 8 }} />
-                <span style={{ fontSize: 12, lineHeight: 1.6 }}>Upload file</span>
-                <input type="file" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setAttachmentFile(f);
-                  setAttachmentName(f?.name ?? '');
-                }} />
-              </label>
-              {attachmentName && <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>Attachment: {attachmentName}</div>}
+              {(attachmentNames.length > 0 || attachmentFiles.length > 0) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                  {attachmentNames.map((name, i) => (
+                    <div key={`saved-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#374151', maxWidth: '100%' }}>
+                      <UploadCloud size={13} style={{ color: '#6b7280', flexShrink: 0 }} />
+                      <span style={{ wordBreak: 'break-all' }}>{name.split('/').pop()}</span>
+                    </div>
+                  ))}
+                  {attachmentFiles.map((file, i) => (
+                    <div key={`new-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: '#fff', border: '1px solid #d1fae5', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#374151', maxWidth: '100%' }}>
+                      <UploadCloud size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+                      <span style={{ wordBreak: 'break-all' }}>{file.name}</span>
+                      {canEdit && (
+                        <button onClick={() => setAttachmentFiles((prev) => prev.filter((_, idx) => idx !== i))} style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {canEdit && (
+                <label style={{ width: '100%', minHeight: attachmentNames.length + attachmentFiles.length > 0 ? 60 : 120, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#666', textAlign: 'center', padding: 12, boxSizing: 'border-box' }}>
+                  <UploadCloud size={18} style={{ marginBottom: 6 }} />
+                  <span style={{ fontSize: 12, lineHeight: 1.6 }}>Click to add more files</span>
+                  <input type="file" multiple style={{ display: 'none' }} onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) setAttachmentFiles((prev) => [...prev, ...files]);
+                    e.target.value = '';
+                  }} />
+                </label>
+              )}
             </div>
 
             <div style={{ border: '1px solid #edf2f7', borderRadius: 10, padding: 10 }}>
