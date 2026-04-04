@@ -286,11 +286,15 @@ function PaymentEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [cRes, aRes] = await Promise.all([
+      const [cRes, aRes, choicesRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/sales/customers/?page_size=200&active=true'),
         api.get<any[]>('/api/v1/accounting/chart-of-accounts/tree/'),
+        api.get<{ next_number?: string }>('/api/v1/sales/customer-payments/choices/'),
       ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
+      if (isCreate && choicesRes.data.next_number) {
+        setPaymentNumber(choicesRes.data.next_number);
+      }
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
@@ -305,7 +309,7 @@ function PaymentEditor() {
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isCreate]);
 
   const fetchOutstanding = useCallback(async (customerId: string, paymentTypeOverride?: PaymentType) => {
     const pt = paymentTypeOverride ?? paymentType;
@@ -373,22 +377,40 @@ function PaymentEditor() {
   async function save() {
     setError('');
 
-    if ((Number(amountReceived) || 0) <= 0) {
-      setError('Amount received must be greater than 0.');
-      return;
+    const validationErrors: string[] = [];
+
+    if (!customer) validationErrors.push('Customer is required.');
+    if (!paidThrough) validationErrors.push('Paid through account is required.');
+    if (!paymentDate) validationErrors.push('Payment date is required.');
+
+    const receivedNum = Number(amountReceived);
+    if (!amountReceived || isNaN(receivedNum)) {
+      validationErrors.push('Amount received must be a valid number.');
+    } else if (receivedNum <= 0) {
+      validationErrors.push('Amount received must be greater than 0.');
     }
-    if (paymentType === 'invoice_payment') {
-      if (amountApplied > (Number(amountReceived) || 0)) {
-        setError('Total allocations cannot exceed amount received.');
-        return;
+
+    if (validationErrors.length === 0 && paymentType === 'invoice_payment') {
+      if (amountApplied > receivedNum) {
+        validationErrors.push(
+          `Total allocated (${fmt(amountApplied)}) exceeds amount received (${fmt(receivedNum)}). Please reduce allocations or increase the amount received.`,
+        );
       }
       for (const inv of outstanding) {
         const a = Number(allocations[inv.id] || 0);
-        if (a > (Number(inv.balance_amount) || 0)) {
-          setError(`Allocation exceeds invoice balance for ${inv.invoice_number}.`);
-          return;
+        if (a < 0) {
+          validationErrors.push(`Allocation for invoice ${inv.invoice_number} cannot be negative.`);
+        } else if (a > (Number(inv.balance_amount) || 0)) {
+          validationErrors.push(
+            `Allocation of ${fmt(a)} for invoice ${inv.invoice_number} exceeds its outstanding balance of ${fmt(inv.balance_amount)}.`,
+          );
         }
       }
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('\n'));
+      return;
     }
 
     setSaving(true);
@@ -465,7 +487,16 @@ function PaymentEditor() {
           </div>
         </div>
 
-        {error && <div style={{ margin: 12, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>{error}</div>}
+        {error && (
+          <div style={{ margin: 12, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>
+            {error.split('\n').map((line, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < error.split('\n').length - 1 ? 4 : 0 }}>
+                <span style={{ marginTop: 2, flexShrink: 0 }}>•</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ padding: 14, display: 'grid', gap: 12 }}>
           <div style={{ border: '1px solid #edf2f7', borderRadius: 10, overflow: 'hidden' }}>
@@ -485,8 +516,8 @@ function PaymentEditor() {
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
               </select>
 
-              <span style={{ fontSize: 12.5, color: '#555' }}>Payment #*</span>
-              <input value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} style={inputSt} placeholder="CP-0001" />
+              <span style={{ fontSize: 12.5, color: '#555' }}>Payment #</span>
+              <input value={paymentNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
 
               <span style={{ fontSize: 12.5, color: '#555' }}>Amount Received*</span>
               <input type="number" step="0.01" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} style={inputSt} placeholder="Empty" />
