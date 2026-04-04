@@ -4,6 +4,8 @@ import { Search, Plus, Pencil, Trash2, SlidersHorizontal, ChevronDown } from 'lu
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function digitsOnly(v: string) { return v.replace(/\D+/g, ''); }
+
 type VatTreatment = 'vat_registered_ksa' | 'not_vat_registered_ksa' | 'outside_ksa';
 type OpeningBalanceType = 'none' | 'i_owe_customer' | 'customer_owes_me';
 
@@ -360,12 +362,12 @@ function CustomersModal({
                 <input value={street} onChange={(e) => setStreet(e.target.value)} style={inputSt} required placeholder="English" />
                 <input value={streetAr} onChange={(e) => setStreetAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
 
-                <span style={labelSt}>Building Number*</span>
-                <input value={building} onChange={(e) => setBuilding(e.target.value)} style={inputSt} required />
+                <span style={labelSt}>Building Number* (4 digits)</span>
+                <input value={building} onChange={(e) => setBuilding(digitsOnly(e.target.value))} style={inputSt} required inputMode="numeric" pattern="[0-9]*" placeholder="4-digit number" maxLength={4} />
                 <div />
 
-                <span style={labelSt}>Land Identifier*</span>
-                <input value={landId} onChange={(e) => setLandId(e.target.value)} style={inputSt} required />
+                <span style={labelSt}>Land Identifier* (4 digits)</span>
+                <input value={landId} onChange={(e) => setLandId(digitsOnly(e.target.value))} style={inputSt} required inputMode="numeric" pattern="[0-9]*" placeholder="4-digit number" maxLength={4} />
                 <div />
 
                 <span style={labelSt}>District*</span>
@@ -376,8 +378,8 @@ function CustomersModal({
                 <input value={city} onChange={(e) => setCity(e.target.value)} style={inputSt} required placeholder="English" />
                 <input value={cityAr} onChange={(e) => setCityAr(e.target.value)} style={inputSt} placeholder="عربي" dir="rtl" />
 
-                <span style={labelSt}>Postal Code*</span>
-                <input value={postal} onChange={(e) => setPostal(e.target.value)} style={inputSt} required />
+                <span style={labelSt}>Postal Code* (5 digits)</span>
+                <input value={postal} onChange={(e) => setPostal(digitsOnly(e.target.value))} style={inputSt} required inputMode="numeric" pattern="[0-9]*" placeholder="5-digit code" maxLength={5} />
                 <div />
               </div>
             </div>

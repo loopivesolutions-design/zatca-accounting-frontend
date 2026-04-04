@@ -572,11 +572,9 @@ function SuppliersModal({
                 <span style={{ ...labelSt, color: PAGE_TEXT }}>Phone Number</span>
                 <input
                   value={phone}
-                  onChange={(e) => setPhone(digitsOnly(e.target.value))}
+                  onChange={(e) => setPhone(e.target.value.replace(/[^\d\s+()\-extEXT]/g, ''))}
                   style={inputSt}
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  placeholder="Empty"
+                  placeholder="+1 (555) 123-4567 ext 89"
                 />
               </div>
             </div>
@@ -648,18 +646,19 @@ function SuppliersModal({
                   <input value={streetAr} onChange={(e) => setStreetAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
                 ) : <div />}
 
-                <span style={labelSt}>Building Number*</span>
-                <input value={building} onChange={(e) => setBuilding(e.target.value)} style={inputSt} required placeholder="Empty" />
+                <span style={labelSt}>Building Number* (4 digits)</span>
+                <input value={building} onChange={(e) => setBuilding(digitsOnly(e.target.value))} style={inputSt} required inputMode="numeric" pattern="[0-9]*" placeholder="4-digit number" maxLength={4} />
 
-                <span style={labelSt}>Land Identifier*</span>
+                <span style={labelSt}>Land Identifier* (4 digits)</span>
                 <input
                   value={landId}
                   onChange={(e) => setLandId(digitsOnly(e.target.value))}
                   style={inputSt}
                   required
-                  placeholder="Numbers only"
                   inputMode="numeric"
                   pattern="[0-9]*"
+                  placeholder="4-digit number"
+                  maxLength={4}
                 />
 
                 <span style={labelSt}>District*</span>
@@ -690,8 +689,8 @@ function SuppliersModal({
                   <input value={cityAr} onChange={(e) => setCityAr(e.target.value)} style={inputSt} placeholder="Empty" dir="rtl" />
                 ) : <div />}
 
-                <span style={labelSt}>Postal Code*</span>
-                <input value={postal} onChange={(e) => setPostal(e.target.value)} style={inputSt} required placeholder="Empty" />
+                <span style={labelSt}>Postal Code* (5 digits)</span>
+                <input value={postal} onChange={(e) => setPostal(digitsOnly(e.target.value))} style={inputSt} required inputMode="numeric" pattern="[0-9]*" placeholder="5-digit code" maxLength={5} />
               </div>
             </div>
           </div>

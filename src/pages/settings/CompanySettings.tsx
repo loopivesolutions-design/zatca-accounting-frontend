@@ -3,6 +3,8 @@ import { Trash2 } from 'lucide-react';
 import api, { BACKEND_URL } from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
+function digitsOnly(v: string) { return v.replace(/\D+/g, ''); }
+
 interface CompanySettings {
   id: string;
   logo: string | null;
@@ -376,8 +378,8 @@ export default function CompanySettingsPage() {
                       <input value={draft.street_address_ar ?? ''} onChange={(e) => setDraft((p) => ({ ...p, street_address_ar: e.target.value }))} style={inputSt} placeholder="عربي" dir="rtl" />
                     </div>
 
-                    <span style={labelSt}>Building Number</span>
-                    <input value={draft.building_number ?? ''} onChange={(e) => setDraft((p) => ({ ...p, building_number: e.target.value }))} style={inputSt} />
+                    <span style={labelSt}>Building Number (4 digits)</span>
+                    <input value={draft.building_number ?? ''} onChange={(e) => setDraft((p) => ({ ...p, building_number: digitsOnly(e.target.value) }))} style={inputSt} inputMode="numeric" pattern="[0-9]*" placeholder="4-digit number" maxLength={4} />
 
                     {/* District */}
                     <span style={labelSt}>District</span>
@@ -410,8 +412,8 @@ export default function CompanySettingsPage() {
                       </div>
                     </div>
 
-                    <span style={labelSt}>Postal Code</span>
-                    <input value={draft.postal_code ?? ''} onChange={(e) => setDraft((p) => ({ ...p, postal_code: e.target.value }))} style={inputSt} />
+                    <span style={labelSt}>Postal Code (5 digits)</span>
+                    <input value={draft.postal_code ?? ''} onChange={(e) => setDraft((p) => ({ ...p, postal_code: digitsOnly(e.target.value) }))} style={inputSt} inputMode="numeric" pattern="[0-9]*" placeholder="5-digit code" maxLength={5} />
 
                     <span style={labelSt}>CR Number</span>
                     <input value={draft.cr_number ?? ''} onChange={(e) => setDraft((p) => ({ ...p, cr_number: e.target.value }))} style={inputSt} />
