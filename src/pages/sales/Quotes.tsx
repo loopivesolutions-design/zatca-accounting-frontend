@@ -44,7 +44,7 @@ interface QuoteDetail {
   status_display: string;
   issuer_details?: {
     company_name?: string;
-    address?: string;
+    street_address?: string;
     vat_registration_number?: string;
     logo?: string | null;
   };
@@ -319,20 +319,32 @@ function QuotesEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [cRes, tRes, pRes, qRes] = await Promise.all([
+      const [cRes, tRes, pRes, qRes, csRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/sales/customers/?page_size=200&active=true'),
         api.get<{ results: any[] }>('/api/v1/accounting/tax-rates/?page_size=200&active=true&tax_type=sales'),
         api.get<{ results: any[] }>('/api/v1/products/items/?page_size=200&active=true'),
-        api.get<{ statuses?: Choice[]; quote_statuses?: Choice[] }>('/api/v1/sales/quotes/choices/'),
+        api.get<{ statuses?: Choice[]; next_number?: string }>('/api/v1/sales/quotes/choices/'),
+        api.get<{ company_name?: string; street_address?: string; vat_registration_number?: string; logo?: string | null }>('/api/v1/main/company-settings/'),
       ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
       setTaxRates((tRes.data.results ?? []).map((t) => ({ id: t.id, name: t.name, tax_type: t.tax_type, rate: t.rate })));
       setProducts((pRes.data.results ?? []).map((p) => ({ id: p.id, code: p.code ?? '', name: p.name ?? '' })));
-      void qRes;
+      if (isCreate && qRes.data.next_number) {
+        setQuoteNumber(qRes.data.next_number);
+      }
+      if (isCreate) {
+        const cs = csRes.data;
+        setIssuer({
+          company_name: cs.company_name,
+          street_address: cs.street_address,
+          vat_registration_number: cs.vat_registration_number,
+          logo: cs.logo ?? null,
+        });
+      }
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isCreate]);
 
   const fetchQuote = useCallback(async () => {
     if (isCreate || !id) return;
@@ -520,8 +532,8 @@ function QuotesEditor() {
               </select>
               <span style={{ fontSize: 12.5, color: '#555' }}>Date*</span>
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
-              <span style={{ fontSize: 12.5, color: '#555' }}>Quote #*</span>
-              <input value={quoteNumber} onChange={(e) => setQuoteNumber(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
+              <span style={{ fontSize: 12.5, color: '#555' }}>Quote #</span>
+              <input value={quoteNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -619,22 +631,36 @@ function QuotesEditor() {
                 <img src={issuer.logo} alt="Issuer logo" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }} />
               ) : null}
               <div style={{ fontSize: 12.5, color: '#111827', fontWeight: 600 }}>{issuer?.company_name || 'Your Company Name'}</div>
-              <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>{issuer?.address || 'Riyadh'}</div>
+              {issuer?.street_address && <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>{issuer.street_address}</div>}
               <div style={{ fontSize: 11.5, color: '#6b7280' }}>VAT: {issuer?.vat_registration_number || '-'}</div>
             </div>
 
             <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 12, backgroundColor: '#f9fafb', padding: '12px 10px' }}>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: '#666', marginBottom: 10 }}>Attachments</div>
-              <label style={{ width: '100%', minHeight: 150, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'not-allowed', color: canEdit ? '#666' : '#aaa', textAlign: 'center', padding: 12, boxSizing: 'border-box' }}>
-                <UploadCloud size={20} style={{ marginBottom: 8 }} />
-                <span style={{ fontSize: 12, lineHeight: 1.6 }}>Upload file</span>
-                <input type="file" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setAttachmentFile(f);
-                  setAttachmentName(f?.name ?? '');
-                }} />
-              </label>
-              {attachmentName && <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>Attachment: {attachmentName}</div>}
+              {attachmentName ? (
+                <div style={{ minHeight: 120, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 14, boxSizing: 'border-box', gap: 8 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <UploadCloud size={18} style={{ color: '#0284c7' }} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#374151', fontWeight: 500, textAlign: 'center', wordBreak: 'break-all', maxWidth: '100%' }}>{attachmentName}</div>
+                  {canEdit && (
+                    <button type="button" onClick={() => { setAttachmentFile(null); setAttachmentName(''); }}
+                      style={{ fontSize: 11.5, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <label style={{ width: '100%', minHeight: 120, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'not-allowed', color: canEdit ? '#666' : '#aaa', textAlign: 'center', padding: 12, boxSizing: 'border-box' }}>
+                  <UploadCloud size={20} style={{ marginBottom: 8 }} />
+                  <span style={{ fontSize: 12, lineHeight: 1.6 }}>Upload file</span>
+                  <input type="file" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    setAttachmentFile(f);
+                    setAttachmentName(f?.name ?? '');
+                  }} />
+                </label>
+              )}
             </div>
 
             <div style={{ textAlign: 'right', fontSize: 12.5, color: '#555', lineHeight: 1.8, paddingTop: 8 }}>
