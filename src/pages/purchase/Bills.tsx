@@ -777,9 +777,8 @@ function BillsEditor() {
   const [billDate, setBillDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [note, setNote] = useState('');
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-  const [attachmentName, setAttachmentName] = useState('');
-  const [attachmentPreview, setAttachmentPreview] = useState<string>('');
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [attachmentNames, setAttachmentNames] = useState<string[]>([]);
   const [mergeLineItem, setMergeLineItem] = useState(true);
   const [priceMode, setPriceMode] = useState<'inc_tax' | 'ex_tax'>('inc_tax');
   const [lines, setLines] = useState<BillLine[]>([
@@ -856,8 +855,8 @@ function BillsEditor() {
       setBillDate(data.bill_date ?? '');
       setDueDate(data.due_date ?? '');
       setNote(data.note ?? '');
-      setAttachmentName(data.attachment ?? '');
-      setAttachmentPreview(data.attachment ?? '');
+      if (data.attachment) setAttachmentNames([data.attachment]);
+      else setAttachmentNames([]);
       setPostPayableAccount('');
       setPostVatAccount('');
       setPostingDate('');
@@ -929,15 +928,18 @@ function BillsEditor() {
         : await api.post<BillDetail>('/api/v1/purchases/bills/', body, idemHeader);
 
       // optional attachment upload via patch multipart
-      if (attachmentFile && data.id) {
-        const fd = new FormData();
-        fd.append('attachment', attachmentFile);
-        await api.patch(`/api/v1/purchases/bills/${data.id}/`, fd, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            'Idempotency-Key': billIdempotencyKey(),
-          },
-        });
+      if (attachmentFiles.length > 0 && data.id) {
+        for (const file of attachmentFiles) {
+          const fd = new FormData();
+          fd.append('attachment', file);
+          await api.patch(`/api/v1/purchases/bills/${data.id}/`, fd, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Idempotency-Key': billIdempotencyKey(),
+            },
+          });
+        }
+        setAttachmentFiles([]);
       }
 
       setBillId(data.id);
@@ -1104,9 +1106,6 @@ function BillsEditor() {
               <div style={{ padding: '30px 40px', width: '100%', boxSizing: 'border-box', minHeight: 264, display: 'grid', gridTemplateColumns: '140px 1fr', rowGap: 25, columnGap: 14, alignItems: 'center' }}>
                 <span style={editorLabelSt}>Bill Number*</span>
                 <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} disabled={!canEdit} style={{ ...editorInputNoIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Empty" />
-
-                <span style={editorLabelSt}>External ref.</span>
-                <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...editorInputNoIconSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional — ERP dedupe id" title="Must be unique per supplier when set" />
 
                 <span style={editorLabelSt}>Supplier*</span>
                 <select value={supplier} onChange={(e) => setSupplier(e.target.value)} disabled={!canEdit} style={{ ...editorInputWithIconSt, cursor: canEdit ? 'pointer' : 'not-allowed', backgroundColor: canEdit ? '#fff' : '#f5f5f5' }}>
@@ -1455,40 +1454,65 @@ function BillsEditor() {
           </div>
 
           {/* Right upload panel */}
-          <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 12, backgroundColor: '#f9fafb', minHeight: 420, padding: '18px 16px' }}>
+          <div style={{ border: '1.5px dashed #d1d5db', borderRadius: 12, backgroundColor: '#f9fafb', minHeight: 420, padding: '18px 16px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 12.5, fontWeight: 500, color: '#666', marginBottom: 14 }}>Upload Bill from your Computer</div>
-            <label style={{ width: '100%', minHeight: 320, borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: canEdit ? 'pointer' : 'not-allowed', color: canEdit ? '#666' : '#aaa', textAlign: 'center', padding: 14, boxSizing: 'border-box' }}>
-              <UploadCloud size={22} style={{ marginBottom: 8 }} />
-              <span style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-                Drag a file or click to upload
-                <br />
-                Upload PDFs, image or other document
-                <br />
-                Max file size: 15MB
-              </span>
-              <input type="file" accept="image/*,.pdf" style={{ display: 'none' }} disabled={!canEdit} onChange={(e) => {
-                const f = e.target.files?.[0] ?? null;
-                setAttachmentFile(f);
-                setAttachmentName(f?.name ?? '');
-                if (attachmentPreview && attachmentPreview.startsWith('blob:')) URL.revokeObjectURL(attachmentPreview);
-                setAttachmentPreview(f ? URL.createObjectURL(f) : '');
-              }} />
-            </label>
-            {attachmentPreview && (attachmentFile?.type.startsWith('image/') || (!attachmentFile && attachmentPreview.match(/\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i))) ? (
-              <div style={{ marginTop: 10 }}>
-                <img
-                  src={attachmentPreview}
-                  alt="Attachment preview"
-                  style={{ width: '100%', borderRadius: 8, border: '1px solid #e5e7eb', objectFit: 'contain', maxHeight: 260 }}
-                />
-                <div style={{ marginTop: 6, fontSize: 11.5, color: '#9ca3af', wordBreak: 'break-all' }}>{attachmentName}</div>
-              </div>
-            ) : attachmentName ? (
-              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: '#f3f4f6', borderRadius: 8, padding: '8px 12px' }}>
-                <UploadCloud size={14} style={{ color: '#6b7280', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>{attachmentName}</span>
-              </div>
-            ) : null}
+            <div style={{ borderRadius: 10, border: '1px dashed #d1d5db', backgroundColor: '#fff', padding: 14, boxSizing: 'border-box', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {(attachmentNames.length > 0 || attachmentFiles.length > 0) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {attachmentNames.map((name, i) => {
+                    const isImage = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(name);
+                    return (
+                      <div key={`saved-${i}`} style={{ borderRadius: 8, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                        {isImage
+                          ? <img src={name} alt={name.split('/').pop()} style={{ width: '100%', objectFit: 'contain', maxHeight: 220, display: 'block' }} />
+                          : null}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', backgroundColor: '#f9fafb' }}>
+                          <UploadCloud size={13} style={{ color: '#6b7280', flexShrink: 0 }} />
+                          <span style={{ fontSize: 11.5, color: '#6b7280', wordBreak: 'break-all' }}>{name.split('/').pop()}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {attachmentFiles.map((file, i) => {
+                    const isImage = file.type.startsWith('image/');
+                    const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                    return (
+                      <div key={`new-${i}`} style={{ borderRadius: 8, border: '1px solid #d1fae5', overflow: 'hidden' }}>
+                        {previewUrl && <img src={previewUrl} alt={file.name} style={{ width: '100%', objectFit: 'contain', maxHeight: 220, display: 'block' }} />}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', backgroundColor: '#f0fdf4' }}>
+                          <UploadCloud size={13} style={{ color: '#10b981', flexShrink: 0 }} />
+                          <span style={{ fontSize: 11.5, color: '#374151', wordBreak: 'break-all', flex: 1 }}>{file.name}</span>
+                          {canEdit && (
+                            <button onClick={() => setAttachmentFiles((prev) => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {canEdit && (
+                <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#666', textAlign: 'center', padding: '20px 14px', borderRadius: 8, border: '1px dashed #d1d5db', backgroundColor: '#fafafa', flex: attachmentNames.length + attachmentFiles.length > 0 ? '0 0 auto' : 1 }}>
+                  <UploadCloud size={22} style={{ marginBottom: 8, color: '#9ca3af' }} />
+                  <span style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+                    {attachmentNames.length + attachmentFiles.length > 0 ? 'Click to add more files' : 'Drag a file or click to upload'}
+                    {attachmentNames.length + attachmentFiles.length === 0 && (
+                      <>
+                        <br />
+                        <span style={{ fontSize: 11.5, color: '#9ca3af' }}>PDFs, images or other documents</span>
+                        <br />
+                        <span style={{ fontSize: 11.5, color: '#9ca3af' }}>Max file size: 15MB</span>
+                      </>
+                    )}
+                  </span>
+                  <input type="file" accept="image/*,.pdf" multiple style={{ display: 'none' }} onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 0) setAttachmentFiles((prev) => [...prev, ...files]);
+                    e.target.value = '';
+                  }} />
+                </label>
+              )}
+            </div>
           </div>
         </div>
       </div>

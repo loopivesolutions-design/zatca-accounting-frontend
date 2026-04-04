@@ -682,8 +682,6 @@ function InvoicesEditor() {
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} />
               <span style={{ fontSize: 12.5, color: '#555' }}>Invoice #</span>
               <input value={invoiceNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
-              <span style={{ fontSize: 12.5, color: '#555' }}>External ref.</span>
-              <input value={externalReference} onChange={(e) => setExternalReference(e.target.value)} disabled={!canEdit} style={{ ...inputSt, backgroundColor: canEdit ? '#fff' : '#f5f5f5' }} placeholder="Optional ERP reference" />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
