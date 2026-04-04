@@ -33,6 +33,39 @@ interface SupplierPayment {
   updated_at: string;
 }
 
+interface SupplierRefundRow {
+  id: string;
+  refund_number: string;
+  supplier: string;
+  supplier_name: string;
+  paid_through: string;
+  paid_through_code: string;
+  paid_through_name: string;
+  amount_refunded: string;
+  refund_date: string;
+  is_posted: boolean;
+  amount_applied: string;
+  remaining_amount: string;
+  created_at: string;
+}
+
+// Unified row used for the combined list
+interface UnifiedRow {
+  id: string;
+  rowType: 'payment' | 'refund';
+  number: string;
+  supplier_name: string;
+  paid_through_code: string;
+  paid_through_name: string;
+  type_display: string;
+  amount: string;
+  applied: string;
+  remaining: string;
+  date: string;
+  is_posted: boolean;
+  created_at: string;
+}
+
 interface SupplierChoice { id: string; company_name: string; }
 interface AccountChoice { id: string; code: string; name: string; }
 interface OutstandingBill {
@@ -58,7 +91,7 @@ function fmt(v: string | number) {
 
 function PaymentsList() {
   const nav = useNavigate();
-  const [rows, setRows] = useState<SupplierPayment[]>([]);
+  const [rows, setRows] = useState<UnifiedRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -92,13 +125,68 @@ function PaymentsList() {
   const fetchRows = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page_size: '100' });
-      if (search.trim()) params.set('search', search.trim());
-      if (supplier) params.set('supplier', supplier);
-      if (paymentType) params.set('payment_type', paymentType);
-      const { data } = await api.get<{ count: number; results: SupplierPayment[] }>(`/api/v1/purchases/supplier-payments/?${params}`);
-      setRows(data.results ?? []);
-      setTotal(data.count ?? 0);
+      const baseParams = new URLSearchParams({ page_size: '100' });
+      if (search.trim()) baseParams.set('search', search.trim());
+      if (supplier) baseParams.set('supplier', supplier);
+
+      const showPayments = !paymentType || paymentType === 'bill_payment' || paymentType === 'advance_payment';
+      const showRefunds = !paymentType || paymentType === 'received_refund';
+
+      const promises: Promise<UnifiedRow[]>[] = [];
+
+      if (showPayments) {
+        const p = new URLSearchParams(baseParams);
+        if (paymentType && paymentType !== 'received_refund') p.set('payment_type', paymentType);
+        promises.push(
+          api.get<{ count: number; results: SupplierPayment[] }>(`/api/v1/purchases/supplier-payments/?${p}`)
+            .then(({ data }) =>
+              (data.results ?? []).map((r): UnifiedRow => ({
+                id: r.id,
+                rowType: 'payment',
+                number: r.payment_number,
+                supplier_name: r.supplier_name,
+                paid_through_code: r.paid_through_code,
+                paid_through_name: r.paid_through_name,
+                type_display: r.payment_type_display,
+                amount: r.amount_paid,
+                applied: r.amount_applied,
+                remaining: r.remaining_amount,
+                date: r.payment_date,
+                is_posted: r.is_posted,
+                created_at: r.created_at,
+              }))
+            ).catch(() => [])
+        );
+      }
+
+      if (showRefunds) {
+        const p = new URLSearchParams(baseParams);
+        promises.push(
+          api.get<{ count: number; results: SupplierRefundRow[] }>(`/api/v1/purchases/supplier-refunds/?${p}`)
+            .then(({ data }) =>
+              (data.results ?? []).map((r): UnifiedRow => ({
+                id: r.id,
+                rowType: 'refund',
+                number: r.refund_number,
+                supplier_name: r.supplier_name,
+                paid_through_code: r.paid_through_code,
+                paid_through_name: r.paid_through_name,
+                type_display: 'Received Refund',
+                amount: r.amount_refunded,
+                applied: r.amount_applied,
+                remaining: r.remaining_amount,
+                date: r.refund_date,
+                is_posted: r.is_posted,
+                created_at: r.created_at,
+              }))
+            ).catch(() => [])
+        );
+      }
+
+      const results = (await Promise.all(promises)).flat();
+      results.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setRows(results);
+      setTotal(results.length);
     } catch {
       /* silent */
     } finally {
@@ -226,15 +314,16 @@ function PaymentsList() {
             ) : rows.length === 0 ? (
               <tr><td colSpan={10} style={{ ...TD, textAlign: 'center', padding: '40px 0', color: '#aaa', borderRight: 'none' }}>No supplier payments found.</td></tr>
             ) : rows.map((r) => (
-              <tr key={r.id} style={{ backgroundColor: '#fff', cursor: 'pointer' }} onClick={() => nav(`/purchase/supplier-payments/${r.id}`)}>
-                <td style={{ ...TD, fontWeight: 600 }}>{r.payment_number}</td>
+              <tr key={`${r.rowType}-${r.id}`} style={{ backgroundColor: '#fff', cursor: 'pointer' }}
+                onClick={() => nav(r.rowType === 'refund' ? `/purchase/supplier-refunds/${r.id}` : `/purchase/supplier-payments/${r.id}`)}>
+                <td style={{ ...TD, fontWeight: 600 }}>{r.number}</td>
                 <td style={TD}>{r.supplier_name}</td>
                 <td style={TD}>{r.paid_through_code} - {r.paid_through_name}</td>
-                <td style={TD}>{r.payment_type_display}</td>
-                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.amount_paid)}</td>
-                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.amount_applied)}</td>
-                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.remaining_amount)}</td>
-                <td style={TD}>{r.payment_date}</td>
+                <td style={TD}>{r.type_display}</td>
+                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.amount)}</td>
+                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.applied)}</td>
+                <td style={{ ...TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.remaining)}</td>
+                <td style={TD}>{r.date}</td>
                 <td style={TD}>{r.is_posted ? 'Yes' : 'No'}</td>
                 <td style={{ ...TD, borderRight: 'none' }}>{r.created_at?.replace('T', ' ').slice(0, 16) || '—'}</td>
               </tr>
@@ -243,7 +332,7 @@ function PaymentsList() {
         </table>
         {!loading && rows.length > 0 && (
           <div style={{ padding: '10px 16px', borderTop: '1px solid #f5f5f5' }}>
-            <span style={{ fontSize: 12.5, color: '#aaa' }}>{total} {total === 1 ? 'payment' : 'payments'}</span>
+            <span style={{ fontSize: 12.5, color: '#aaa' }}>{total} {total === 1 ? 'record' : 'records'}</span>
           </div>
         )}
       </div>
@@ -286,11 +375,15 @@ function PaymentEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [sRes, aRes] = await Promise.all([
+      const [sRes, aRes, choicesRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/purchases/suppliers/?page_size=200&active=true'),
         api.get<any[]>('/api/v1/accounting/chart-of-accounts/tree/'),
+        api.get<{ next_number?: string }>('/api/v1/purchases/supplier-payments/choices/'),
       ]);
       setSuppliers((sRes.data.results ?? []).map((s) => ({ id: s.id, company_name: s.company_name })));
+      if (isCreate && choicesRes.data.next_number) {
+        setPaymentNumber(choicesRes.data.next_number);
+      }
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
@@ -305,7 +398,7 @@ function PaymentEditor() {
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isCreate]);
 
   const fetchOutstanding = useCallback(async (supplierId: string, paymentTypeOverride?: PaymentType) => {
     const pt = paymentTypeOverride ?? paymentType;
@@ -375,7 +468,6 @@ function PaymentEditor() {
 
     if (!supplier) { setError('Supplier is required.'); return; }
     if (!paidThrough) { setError('Paid through account is required.'); return; }
-    if (!paymentNumber.trim()) { setError('Payment number is required.'); return; }
     if ((Number(amountPaid) || 0) <= 0) { setError('Amount paid must be greater than 0.'); return; }
     if (!paymentDate) { setError('Payment date is required.'); return; }
 
@@ -486,8 +578,8 @@ function PaymentEditor() {
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
               </select>
 
-              <span style={{ fontSize: 12.5, color: '#555' }}>Payment #*</span>
-              <input value={paymentNumber} onChange={(e) => setPaymentNumber(e.target.value)} style={inputSt} placeholder="SP-0001" />
+              <span style={{ fontSize: 12.5, color: '#555' }}>Payment #</span>
+              <input value={paymentNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
 
               <span style={{ fontSize: 12.5, color: '#555' }}>Amount Paid*</span>
               <input type="number" step="0.01" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} style={inputSt} placeholder="Empty" />

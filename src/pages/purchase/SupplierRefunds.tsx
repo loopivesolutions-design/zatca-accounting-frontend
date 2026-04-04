@@ -225,11 +225,15 @@ function RefundEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [sRes, aRes] = await Promise.all([
+      const [sRes, aRes, choicesRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/purchases/suppliers/?page_size=200&active=true'),
         api.get<any[]>('/api/v1/accounting/chart-of-accounts/tree/'),
+        api.get<{ next_number?: string }>('/api/v1/purchases/supplier-refunds/choices/'),
       ]);
       setSuppliers((sRes.data.results ?? []).map((s) => ({ id: s.id, company_name: s.company_name })));
+      if (isCreate && choicesRes.data.next_number) {
+        setRefundNumber(choicesRes.data.next_number);
+      }
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
@@ -240,7 +244,7 @@ function RefundEditor() {
       if (Array.isArray(aRes.data)) walk(aRes.data);
       setAccounts(flat);
     } catch { /* silent */ }
-  }, []);
+  }, [isCreate]);
 
   const fetchOutstanding = useCallback(async (supplierId: string) => {
     if (!supplierId) { setOutstanding([]); return; }
@@ -287,21 +291,40 @@ function RefundEditor() {
   async function save() {
     setError('');
 
-    if (!supplier) { setError('Supplier is required.'); return; }
-    if (!paidThrough) { setError('Paid through account is required.'); return; }
-    if (!refundNumber.trim()) { setError('Refund number is required.'); return; }
-    if ((Number(amountRefunded) || 0) <= 0) { setError('Amount refunded must be greater than 0.'); return; }
-    if (!refundDate) { setError('Refund date is required.'); return; }
-    if (amountApplied > (Number(amountRefunded) || 0)) {
-      setError('Total allocations cannot exceed amount refunded.');
-      return;
+    const validationErrors: string[] = [];
+
+    if (!supplier) validationErrors.push('Supplier is required.');
+    if (!paidThrough) validationErrors.push('Paid through account is required.');
+    if (!refundDate) validationErrors.push('Refund date is required.');
+
+    const refundedNum = Number(amountRefunded);
+    if (!amountRefunded || isNaN(refundedNum)) {
+      validationErrors.push('Amount received must be a valid number.');
+    } else if (refundedNum <= 0) {
+      validationErrors.push('Amount received must be greater than 0.');
     }
-    for (const dn of outstanding) {
-      const a = Number(allocations[dn.id] || 0);
-      if (a > (Number(dn.balance_amount) || 0)) {
-        setError(`Allocation exceeds debit note balance for ${dn.debit_note_number}.`);
-        return;
+
+    if (validationErrors.length === 0) {
+      if (amountApplied > refundedNum) {
+        validationErrors.push(
+          `Total allocated (${fmt(amountApplied)}) exceeds amount received (${fmt(refundedNum)}). Please reduce allocations or increase the amount received.`,
+        );
       }
+      for (const dn of outstanding) {
+        const a = Number(allocations[dn.id] || 0);
+        if (a < 0) {
+          validationErrors.push(`Allocation for debit note ${dn.debit_note_number} cannot be negative.`);
+        } else if (a > (Number(dn.balance_amount) || 0)) {
+          validationErrors.push(
+            `Allocation of ${fmt(a)} for debit note ${dn.debit_note_number} exceeds its outstanding balance of ${fmt(dn.balance_amount)}.`,
+          );
+        }
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('\n'));
+      return;
     }
 
     setSaving(true);
@@ -389,7 +412,12 @@ function RefundEditor() {
 
       {error && (
         <div style={{ marginBottom: 16, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
-          {error}
+          {error.split('\n').map((line, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < error.split('\n').length - 1 ? 4 : 0 }}>
+              <span style={{ marginTop: 2, flexShrink: 0 }}>•</span>
+              <span>{line}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -416,10 +444,10 @@ function RefundEditor() {
             onChange={(e) => setAmountRefunded(e.target.value)}
             style={inputSt} placeholder="Empty" />
 
-          <span style={labelSt}>Refund #*</span>
+          <span style={labelSt}>Refund #</span>
           <input
-            value={refundNumber} onChange={(e) => setRefundNumber(e.target.value)}
-            style={inputSt} placeholder="SRF-0001" />
+            value={refundNumber} readOnly
+            style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
 
           <span style={labelSt}>Date*</span>
           <input type="date" value={refundDate} onChange={(e) => setRefundDate(e.target.value)} style={inputSt} />
