@@ -5,7 +5,7 @@ import { Plus, Search, SlidersHorizontal, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import { parseApiError } from '../../api/errors';
 
-type DebitNoteStatus = 'draft' | 'posted';
+type DebitNoteStatus = 'draft' | 'posted' | 'partially_paid' | 'paid';
 
 interface DebitNoteListRow {
   id: string;
@@ -106,15 +106,20 @@ const inputSt: CSSProperties = {
 };
 
 function statusPill(status: DebitNoteStatus) {
-  const posted = status === 'posted';
+  const cfg: Record<DebitNoteStatus, { bg: string; color: string; label: string }> = {
+    draft:           { bg: '#fef3c7', color: '#b45309', label: 'DRAFT' },
+    posted:          { bg: '#dcfce7', color: '#16a34a', label: 'POSTED' },
+    partially_paid:  { bg: '#dbeafe', color: '#1d4ed8', label: 'PARTIAL' },
+    paid:            { bg: '#f3e8ff', color: '#7e22ce', label: 'PAID' },
+  };
+  const { bg, color, label } = cfg[status] ?? cfg.draft;
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', height: 20, paddingInline: 8,
       borderRadius: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3,
-      backgroundColor: posted ? '#dcfce7' : '#fef3c7',
-      color: posted ? '#16a34a' : '#b45309',
+      backgroundColor: bg, color,
     }}>
-      {posted ? 'POSTED' : 'DRAFT'}
+      {label}
     </span>
   );
 }
@@ -246,6 +251,8 @@ function DebitNotesList() {
                     <option value="">All</option>
                     <option value="draft">Draft</option>
                     <option value="posted">Posted</option>
+                    <option value="partially_paid">Partially Paid</option>
+                    <option value="paid">Paid</option>
                   </select>
                 </div>
                 <div>
