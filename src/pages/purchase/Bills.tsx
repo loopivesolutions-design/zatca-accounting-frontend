@@ -35,6 +35,8 @@ interface BillListRow {
 
 interface BillLine {
   id?: string;
+  product?: string | null;
+  product_name?: string | null;
   description_text: string;
   selected_products: { id: string; name: string; code?: string }[];
   account: string;
@@ -861,15 +863,24 @@ function BillsEditor() {
       setPostVatAccount('');
       setPostingDate('');
       setPostMemo('');
-      setLines((data.lines ?? []).map((l) => ({
-        id: l.id,
-        ...parseLineDescription((l as unknown as { description?: string }).description),
-        account: l.account ?? '',
-        quantity: String(l.quantity ?? ''),
-        unit_price: String(l.unit_price ?? ''),
-        tax_rate: l.tax_rate ?? '',
-        discount_percent: String(l.discount_percent ?? '0'),
-      })));
+      setLines((data.lines ?? []).map((l) => {
+        const parsed = parseLineDescription((l as unknown as { description?: string }).description);
+        // Prefer the stored product FK over description-embedded product tags
+        if (l.product && l.product_name) {
+          parsed.selected_products = [{ id: l.product, name: l.product_name, code: '' }];
+        }
+        return {
+          id: l.id,
+          product: l.product,
+          product_name: l.product_name,
+          ...parsed,
+          account: l.account ?? '',
+          quantity: String(l.quantity ?? ''),
+          unit_price: String(l.unit_price ?? ''),
+          tax_rate: l.tax_rate ?? '',
+          discount_percent: String(l.discount_percent ?? '0'),
+        };
+      }));
     } catch (err) {
       setError(parseApiError(err));
     } finally {
@@ -915,6 +926,7 @@ function BillsEditor() {
         note,
         lines: lines.map((l) => ({
           description: buildLineDescription(l),
+          product: l.selected_products[0]?.id || null,
           account: l.account,
           quantity: l.quantity,
           unit_price: l.unit_price,
