@@ -235,11 +235,15 @@ function RefundEditor() {
 
   const fetchMeta = useCallback(async () => {
     try {
-      const [cRes, aRes] = await Promise.all([
+      const [cRes, aRes, choicesRes] = await Promise.all([
         api.get<{ results: any[] }>('/api/v1/sales/customers/?page_size=200&active=true'),
         api.get<any[]>('/api/v1/accounting/chart-of-accounts/tree/'),
+        api.get<{ next_number?: string }>('/api/v1/sales/customer-refunds/choices/'),
       ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
+      if (isCreate && choicesRes.data.next_number) {
+        setRefundNumber(choicesRes.data.next_number);
+      }
       const flat: AccountChoice[] = [];
       function walk(nodes: any[]) {
         nodes.forEach((n) => {
@@ -254,7 +258,7 @@ function RefundEditor() {
     } catch {
       /* silent */
     }
-  }, []);
+  }, [isCreate]);
 
   const fetchOutstanding = useCallback(async (customerId: string) => {
     if (!customerId) {
@@ -314,20 +318,40 @@ function RefundEditor() {
   async function save() {
     setError('');
 
-    if ((Number(amountRefunded) || 0) <= 0) {
-      setError('Amount refunded must be greater than 0.');
-      return;
+    const validationErrors: string[] = [];
+
+    if (!customer) validationErrors.push('Customer is required.');
+    if (!paidThrough) validationErrors.push('Paid through account is required.');
+    if (!refundDate) validationErrors.push('Refund date is required.');
+
+    const refundedNum = Number(amountRefunded);
+    if (!amountRefunded || isNaN(refundedNum)) {
+      validationErrors.push('Amount refunded must be a valid number.');
+    } else if (refundedNum <= 0) {
+      validationErrors.push('Amount refunded must be greater than 0.');
     }
-    if (amountApplied > (Number(amountRefunded) || 0)) {
-      setError('Total allocations cannot exceed amount refunded.');
-      return;
-    }
-    for (const cn of outstanding) {
-      const a = Number(allocations[cn.id] || 0);
-      if (a > (Number(cn.balance_amount) || 0)) {
-        setError(`Allocation exceeds credit note balance for ${cn.credit_note_number}.`);
-        return;
+
+    if (validationErrors.length === 0) {
+      if (amountApplied > refundedNum) {
+        validationErrors.push(
+          `Total allocated (${fmt(amountApplied)}) exceeds amount refunded (${fmt(refundedNum)}). Please reduce allocations or increase the amount refunded.`,
+        );
       }
+      for (const cn of outstanding) {
+        const a = Number(allocations[cn.id] || 0);
+        if (a < 0) {
+          validationErrors.push(`Allocation for credit note ${cn.credit_note_number} cannot be negative.`);
+        } else if (a > (Number(cn.balance_amount) || 0)) {
+          validationErrors.push(
+            `Allocation of ${fmt(a)} for credit note ${cn.credit_note_number} exceeds its outstanding balance of ${fmt(cn.balance_amount)}.`,
+          );
+        }
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      setError(validationErrors.join('\n'));
+      return;
     }
 
     setSaving(true);
@@ -401,7 +425,16 @@ function RefundEditor() {
           </div>
         </div>
 
-        {error && <div style={{ margin: 12, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>{error}</div>}
+        {error && (
+          <div style={{ margin: 12, backgroundColor: '#fff0f0', border: '1px solid #fecaca', color: '#c0392b', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>
+            {error.split('\n').map((line, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < error.split('\n').length - 1 ? 4 : 0 }}>
+                <span style={{ marginTop: 2, flexShrink: 0 }}>•</span>
+                <span>{line}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div style={{ padding: 14, display: 'grid', gap: 12 }}>
           <div style={{ border: '1px solid #edf2f7', borderRadius: 10, overflow: 'hidden' }}>
@@ -421,8 +454,8 @@ function RefundEditor() {
                 {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
               </select>
 
-              <span style={{ fontSize: 12.5, color: '#555' }}>Refund #*</span>
-              <input value={refundNumber} onChange={(e) => setRefundNumber(e.target.value)} style={inputSt} placeholder="CRF-0001" />
+              <span style={{ fontSize: 12.5, color: '#555' }}>Refund #</span>
+              <input value={refundNumber} readOnly style={{ ...inputSt, backgroundColor: '#f5f5f5', color: '#888', cursor: 'default' }} />
 
               <span style={{ fontSize: 12.5, color: '#555' }}>Amount Refunded*</span>
               <input type="number" step="0.01" value={amountRefunded} onChange={(e) => setAmountRefunded(e.target.value)} style={inputSt} placeholder="Empty" />
