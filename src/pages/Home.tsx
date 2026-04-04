@@ -61,6 +61,8 @@ export default function Home() {
         color: PAL.slate900,
         position: 'relative',
         overflow: 'hidden',
+        userSelect: 'none',
+        cursor: 'default',
       }}
     >
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
