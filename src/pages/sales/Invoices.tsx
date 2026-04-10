@@ -355,10 +355,12 @@ function InvoicesEditor() {
 
   const canEdit = status === 'draft';
 
-  const subtotal = useMemo(
-    () => lines.reduce((acc, l) => acc + ((Number(l.quantity) || 0) * (Number(l.unit_price) || 0)), 0),
-    [lines],
-  );
+  const subtotal = useMemo(() => lines.reduce((acc, l) => {
+    const gross = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
+    const disc = Number(l.discount_percent) || 0;
+    const afterDisc = gross - (gross * disc / 100);
+    return acc + afterDisc;
+  }, 0), [lines]);
   const totalVat = useMemo(() => lines.reduce((acc, l) => {
     const gross = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0);
     const disc = Number(l.discount_percent) || 0;
