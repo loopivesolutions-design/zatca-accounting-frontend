@@ -100,6 +100,10 @@ function fmt(v: string | number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function statusPill(status: InvoiceStatus) {
   let bg = '#f3f4f6';
   let color = '#374151';
@@ -381,6 +385,9 @@ function InvoicesEditor() {
         setInvoiceNumber(iChoicesRes.data.next_number);
       }
       if (isCreate) {
+        setDate((prev) => prev || todayISODate());
+      }
+      if (isCreate) {
         const cs = csRes.data;
         setIssuer({ company_name: cs.company_name, street_address: cs.street_address, vat_registration_number: cs.vat_registration_number, logo: cs.logo ?? null });
       }
@@ -476,7 +483,7 @@ function InvoicesEditor() {
       const body: Record<string, unknown> = {
         invoice_number: invoiceNumber,
         customer,
-        date,
+        date: date || todayISODate(),
         due_date: dueDate || null,
         note,
         lines: lines.map((l) => ({
@@ -490,7 +497,7 @@ function InvoicesEditor() {
         })),
       };
       if (externalReference.trim()) body.external_reference = externalReference.trim();
-      else body.external_reference = null;
+      else body.external_reference = '';
 
       const idem = { headers: { 'Idempotency-Key': invoiceIdempotencyKey() } };
       const { data } = invoiceId

@@ -93,6 +93,10 @@ function fmt(v: string | number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function statusPill(status: CreditNoteStatus) {
   let bg = '#f3f4f6'; let color = '#374151';
   let label = status.toUpperCase();
@@ -363,6 +367,9 @@ function CreditNotesEditor() {
         setCreditNoteNumber(cnChoicesRes.data.next_number);
       }
       if (isCreate) {
+        setDate((prev) => prev || todayISODate());
+      }
+      if (isCreate) {
         const cs = csRes.data;
         setIssuer({ company_name: cs.company_name, street_address: cs.street_address, vat_registration_number: cs.vat_registration_number, logo: cs.logo ?? null });
       }
@@ -464,7 +471,7 @@ function CreditNotesEditor() {
       const body: Record<string, unknown> = {
         credit_note_number: creditNoteNumber,
         customer,
-        date,
+        date: date || todayISODate(),
         note,
         lines: lines.map((l) => ({
           product: l.product || null,
@@ -477,7 +484,7 @@ function CreditNotesEditor() {
         })),
       };
       if (externalReference.trim()) body.external_reference = externalReference.trim();
-      else body.external_reference = null;
+      else body.external_reference = '';
 
       const idem = { headers: { 'Idempotency-Key': creditNoteIdempotencyKey() } };
       const { data } = creditNoteId
