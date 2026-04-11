@@ -919,7 +919,7 @@ function BillsEditor() {
     try {
       const body = {
         bill_number: billNumber,
-        external_reference: externalReference.trim() || null,
+        external_reference: externalReference.trim() || '',
         supplier,
         bill_date: billDate,
         due_date: dueDate || null,

@@ -16,7 +16,7 @@ type ZatcaSubmissionStatus = 'not_submitted' | 'pending' | 'reported' | 'cleared
 interface Choice { id: string; label: string; }
 interface CustomerChoice { id: string; company_name: string; }
 interface TaxRateChoice { id: string; name: string; rate: string; }
-interface ProductChoice { id: string; code: string; name: string; }
+interface ProductChoice { id: string; code: string; name: string; revenue_account?: string | null; }
 interface AccountChoice { id: string; code: string; name: string; }
 
 interface InvoiceListRow {
@@ -382,7 +382,12 @@ function InvoicesEditor() {
       ]);
       setCustomers((cRes.data.results ?? []).map((c) => ({ id: c.id, company_name: c.company_name })));
       setTaxRates((tRes.data.results ?? []).map((t) => ({ id: t.id, name: t.name, rate: t.rate })));
-      setProducts((pRes.data.results ?? []).map((p) => ({ id: p.id, code: p.code ?? '', name: p.name ?? '' })));
+      setProducts((pRes.data.results ?? []).map((p) => ({
+        id: p.id,
+        code: p.code ?? '',
+        name: p.name ?? '',
+        revenue_account: p.revenue_account ?? null,
+      })));
       if (isCreate && iChoicesRes.data.next_number) {
         setInvoiceNumber(iChoicesRes.data.next_number);
       }
@@ -482,21 +487,34 @@ function InvoicesEditor() {
     setSaving(true);
     setError('');
     try {
+      const lineMissingAccount = lines.findIndex((l) => {
+        const fromProduct = l.product ? products.find((p) => p.id === l.product)?.revenue_account : null;
+        return !(l.account || fromProduct);
+      });
+      if (lineMissingAccount >= 0) {
+        setError(`Line ${lineMissingAccount + 1}: choose an account, or select a product that has a revenue account set in Items.`);
+        setSaving(false);
+        return null;
+      }
+
       const body: Record<string, unknown> = {
         invoice_number: invoiceNumber,
         customer,
         date: date || todayISODate(),
         due_date: dueDate || null,
         note,
-        lines: lines.map((l) => ({
-          product: l.product || null,
-          description: l.description,
-          account: l.account || null,
-          quantity: l.quantity,
-          unit_price: l.unit_price,
-          tax_rate: l.tax_rate || null,
-          discount_percent: l.discount_percent || '0',
-        })),
+        lines: lines.map((l) => {
+          const fromProduct = l.product ? products.find((p) => p.id === l.product)?.revenue_account : null;
+          return {
+            product: l.product || null,
+            description: l.description,
+            account: l.account || fromProduct || null,
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            tax_rate: l.tax_rate || null,
+            discount_percent: l.discount_percent || '0',
+          };
+        }),
       };
       if (externalReference.trim()) body.external_reference = externalReference.trim();
       else body.external_reference = '';
@@ -722,7 +740,11 @@ function InvoicesEditor() {
                       <div style={{ display: 'grid', gap: 4 }}>
                         <select value={l.product ?? ''} onChange={(e) => {
                           const p = products.find((x) => x.id === e.target.value);
-                          setLine(idx, { product: e.target.value || null, description: p ? `${p.code} - ${p.name}` : l.description });
+                          setLine(idx, {
+                            product: e.target.value || null,
+                            description: p ? `${p.code} - ${p.name}` : l.description,
+                            account: p?.revenue_account ? p.revenue_account : l.account,
+                          });
                         }} disabled={!canEdit} style={{ ...inputSt, height: 30 }}>
                           <option value="">Select product</option>
                           {products.map((p) => <option key={p.id} value={p.id}>{p.code ? `${p.code} - ` : ''}{p.name}</option>)}

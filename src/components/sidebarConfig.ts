@@ -217,3 +217,45 @@ export const sidebarRouteMap: { route: string; sidebarIdPath: string }[] = [
   { route: '/settings/approvals', sidebarIdPath: 'admin.settings.approvals' },
 ];
 
+/** Destinations for global header search (static paths only). */
+export type SidebarSearchHit = { path: string; label: string; trail: string };
+
+export function getSidebarSearchHits(): SidebarSearchHit[] {
+  const hits: SidebarSearchHit[] = [];
+  const seen = new Set<string>();
+
+  function walk(items: SidebarItem[], trailLabels: string[]) {
+    for (const it of items) {
+      if (it.isHidden) {
+        if (it.children?.length) walk(it.children, trailLabels);
+        continue;
+      }
+      const labels = [...trailLabels, it.label];
+      if (it.path && !it.path.includes(':')) {
+        if (!seen.has(it.path)) {
+          seen.add(it.path);
+          hits.push({ path: it.path, label: it.label, trail: labels.join(' › ') });
+        }
+      }
+      if (it.children?.length) walk(it.children, labels);
+    }
+  }
+
+  for (const g of sidebarConfig) {
+    walk(g.items, []);
+  }
+
+  const extra: SidebarSearchHit[] = [
+    { path: '/purchase/supplier-refunds', label: 'Supplier refunds', trail: 'Purchase › Supplier refunds' },
+    { path: '/sales/customer-refunds', label: 'Customer refunds', trail: 'Sales › Customer refunds' },
+  ];
+  for (const e of extra) {
+    if (!seen.has(e.path)) {
+      seen.add(e.path);
+      hits.push(e);
+    }
+  }
+
+  return hits;
+}
+
