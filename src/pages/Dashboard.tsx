@@ -61,9 +61,9 @@ function MiniBarChart() {
   const maxVal = Math.max(...REVENUE_DATA, ...EXPENSE_DATA);
 
   return (
-    <div className="flex items-end gap-2 h-28 w-full">
+    <div className="flex items-end gap-2 h-28 w-full pt-2 pb-1 px-1">
       {MONTHS.map((month, i) => (
-        <div key={month} className="flex flex-col items-center gap-1 flex-1">
+        <div key={month} className="flex flex-col items-center gap-1.5 flex-1">
           <div className="flex items-end gap-0.5 w-full justify-center" style={{ height: 88 }}>
             <div
               className="rounded-t-sm w-[45%] transition-all"
@@ -102,8 +102,8 @@ function DonutChart() {
   const circumference = 2 * Math.PI * radius;
 
   return (
-    <div className="flex items-center gap-6">
-      <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
+    <div className="flex items-center gap-8 pl-1 pr-2 py-2">
+      <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90 flex-shrink-0">
         {data.map((d, i) => {
           const offset = cumulative;
           const dash = (d.value / 100) * circumference;
@@ -124,9 +124,9 @@ function DonutChart() {
         })}
         <circle cx={cx} cy={cy} r="26" fill="white" />
       </svg>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3 min-w-0 flex-1">
         {data.map((d) => (
-          <div key={d.label} className="flex items-center gap-2">
+          <div key={d.label} className="flex items-center gap-2.5">
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
             <span className="text-[12px] text-gray-500">{d.label}</span>
             <span className="text-[12px] font-semibold text-gray-700 ml-auto pl-4">{d.value}%</span>
@@ -139,26 +139,26 @@ function DonutChart() {
 
 export default function Dashboard() {
   return (
-    <div className="flex flex-col gap-6" style={{ fontFamily: "'Heebo', sans-serif" }}>
+    <div className="flex flex-col gap-8" style={{ fontFamily: "'Heebo', sans-serif" }}>
 
       {/* Greeting */}
-      <div>
+      <div className="pt-1 pb-0.5">
         <h1 className="text-[22px] font-semibold text-gray-800">Good morning, Admin 👋</h1>
-        <p className="text-[14px] text-gray-400 mt-0.5">Here's what's happening with your business today.</p>
+        <p className="text-[14px] text-gray-400 mt-1.5">Here's what's happening with your business today.</p>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-5">
+      <div className="grid grid-cols-4 gap-6">
         {STAT_CARDS.map(({ label, value, change, positive, icon: Icon, bg, iconColor }) => (
-          <div key={label} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-3">
+          <div key={label} className="bg-white rounded-2xl shadow-sm border border-gray-100" style={{ padding: 10 }}>
+            <div className="flex items-center justify-between mb-4">
               <span className="text-[13px] text-gray-500">{label}</span>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: bg }}>
-                <Icon size={17} style={{ color: iconColor }} strokeWidth={2} />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: bg }}>
+                <Icon size={18} style={{ color: iconColor }} strokeWidth={2} />
               </div>
             </div>
             <div className="text-[22px] font-semibold text-gray-800 leading-tight">{value}</div>
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1.5 mt-3 flex-wrap">
               {positive ? (
                 <TrendingUp size={13} style={{ color: '#35C0A3' }} />
               ) : (
@@ -177,15 +177,15 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-3 gap-6">
         {/* Revenue bar chart */}
-        <div className="col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
+        <div className="col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100" style={{ padding: 10 }}>
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-[15px] font-semibold text-gray-800">Revenue vs Expenses</h3>
-              <p className="text-[12px] text-gray-400 mt-0.5">Last 9 months</p>
+              <p className="text-[12px] text-gray-400 mt-1">Last 9 months</p>
             </div>
-            <div className="flex items-center gap-4 text-[12px] text-gray-500">
+            <div className="flex items-center gap-5 text-[12px] text-gray-500 flex-shrink-0 ml-4">
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#35C0A3' }} />
                 Revenue
@@ -200,21 +200,22 @@ export default function Dashboard() {
         </div>
 
         {/* Donut chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div className="mb-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100" style={{ padding: 10 }}>
+          <div className="mb-6">
             <h3 className="text-[15px] font-semibold text-gray-800">Breakdown</h3>
-            <p className="text-[12px] text-gray-400 mt-0.5">Current period</p>
+            <p className="text-[12px] text-gray-400 mt-1">Current period</p>
           </div>
           <DonutChart />
         </div>
       </div>
 
       {/* Recent invoices */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-2">
+        <div className="flex items-center justify-between border-b border-gray-100" style={{ padding: 10 }}>
           <h3 className="text-[15px] font-semibold text-gray-800">Recent ZATCA Invoices</h3>
           <button
-            className="text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors"
+            type="button"
+            className="text-[13px] font-medium px-5 py-2 rounded-lg transition-colors"
             style={{ color: '#35C0A3', backgroundColor: '#e8f8f5' }}
           >
             View All
@@ -226,7 +227,8 @@ export default function Dashboard() {
               {['Invoice ID', 'Customer', 'Amount', 'Date', 'Status'].map((h) => (
                 <th
                   key={h}
-                  className="px-6 py-3 text-left text-[12px] font-medium text-gray-500 uppercase tracking-wide"
+                  className="text-left text-[12px] font-medium text-gray-500 uppercase tracking-wide"
+                  style={{ padding: 10 }}
                 >
                   {h}
                 </th>
@@ -241,20 +243,20 @@ export default function Dashboard() {
                   i === RECENT_INVOICES.length - 1 ? 'border-b-0' : ''
                 }`}
               >
-                <td className="px-6 py-3.5 text-[13px] font-medium" style={{ color: '#35C0A3' }}>
+                <td className="text-[13px] font-medium" style={{ color: '#35C0A3', padding: 10 }}>
                   {inv.id}
                 </td>
-                <td className="px-6 py-3.5 text-[13px] text-gray-700">{inv.customer}</td>
-                <td className="px-6 py-3.5 text-[13px] font-medium text-gray-800">{inv.amount}</td>
-                <td className="px-6 py-3.5 text-[13px] text-gray-500">
+                <td className="text-[13px] text-gray-700" style={{ padding: 10 }}>{inv.customer}</td>
+                <td className="text-[13px] font-medium text-gray-800" style={{ padding: 10 }}>{inv.amount}</td>
+                <td className="text-[13px] text-gray-500" style={{ padding: 10 }}>
                   <div className="flex items-center gap-1.5">
                     <Clock size={12} className="text-gray-400" />
                     {inv.date}
                   </div>
                 </td>
-                <td className="px-6 py-3.5">
+                <td style={{ padding: 10 }}>
                   <span
-                    className={`inline-block px-3 py-1 rounded-full text-[11px] font-medium ${
+                    className={`inline-block px-3.5 py-1.5 rounded-full text-[11px] font-medium ${
                       STATUS_STYLES[inv.status]
                     }`}
                   >
